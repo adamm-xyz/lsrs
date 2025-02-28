@@ -7,7 +7,7 @@ use std::fs::FileType;
 use colored::{Colorize,ColoredString};
 use mime_guess::from_path;
 
-fn get_files(dir_path: &str) -> io::Result<Vec<(OsString,FileType)>> {
+fn get_files(dir_path: &str, flags: &Flags) -> io::Result<Vec<(OsString,FileType)>> {
     //convert to Path obj
     let path = Path::new(dir_path);
 
@@ -26,11 +26,18 @@ fn get_files(dir_path: &str) -> io::Result<Vec<(OsString,FileType)>> {
         let entry = entry?;
         let file_name = entry.file_name();
 
-        if !is_hidden_folder(entry.path().as_path()) {
+        if flags.ignore_hidden {
+            if !is_hidden_folder(entry.path().as_path()) {
+                if let Ok(file_type) = entry.file_type() {
+                    file_list.push((file_name,file_type));
+                }
+            }
+        } else {
             if let Ok(file_type) = entry.file_type() {
                 file_list.push((file_name,file_type));
             }
         }
+
     }
     Ok(file_list)
 }
@@ -88,10 +95,35 @@ fn strify_files(files: &Vec<(OsString,FileType)>) -> Vec<ColoredString> {
     file_strs
 }
 
+struct Flags {
+    ignore_hidden: bool,
+    show_size: bool,
+}
+
+fn parse_flags(user_input: &String) -> Flags {
+    let mut program_flags = Flags {
+        ignore_hidden: true,
+        show_size: false,
+    };
+
+    if user_input.contains("a") {
+        program_flags.ignore_hidden = false;
+    }
+    if user_input.contains("s") {
+        program_flags.show_size = true;
+    }
+
+    program_flags
+}
+
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    match get_files(&args[1]) {
+    let mut flags = parse_flags(&String::from(""));
+    if args.len() >= 3 {
+        flags = parse_flags(&args[2]);
+    }
+    match get_files(&args[1],&flags) {
         Ok(files) => {
             let file_strs = strify_files(&files);
             for file in file_strs{
