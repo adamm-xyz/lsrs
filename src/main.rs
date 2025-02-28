@@ -42,13 +42,16 @@ fn get_file_mime(filename: &str) -> String {
 fn set_file_color(filename: &str) -> ColoredString {
    match get_file_mime(filename).as_str() {
        "image" => {
-           filename.to_string().green()
+           filename.to_string().blue()
        }
        "text" => {
            filename.to_string().yellow()
        }
        "application" => {
-           filename.to_string().blue()
+           filename.to_string().green()
+       }
+       "video" => {
+           filename.to_string().cyan()
        }
        &_ => filename.to_string().magenta()
    }
