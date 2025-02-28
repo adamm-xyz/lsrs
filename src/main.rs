@@ -26,11 +26,20 @@ fn get_files(dir_path: &str) -> io::Result<Vec<(OsString,FileType)>> {
         let entry = entry?;
         let file_name = entry.file_name();
 
-        if let Ok(file_type) = entry.file_type() {
-            file_list.push((file_name,file_type));
+        if !is_hidden_folder(entry.path().as_path()) {
+            if let Ok(file_type) = entry.file_type() {
+                file_list.push((file_name,file_type));
+            }
         }
     }
     Ok(file_list)
+}
+
+fn is_hidden_folder(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .map(|name| name.starts_with('.'))
+        .unwrap_or(false)
 }
 
 fn get_file_mime(filename: &str) -> String {
