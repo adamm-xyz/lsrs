@@ -1,21 +1,21 @@
-use std::fs;
-use std::path::Path;
-use std::io;
+use colored::{ColoredString, Colorize};
+use mime_guess::from_path;
 use std::env;
 use std::ffi::OsString;
-use std::fs::{FileType,Metadata};
-use colored::{Colorize,ColoredString};
-use mime_guess::from_path;
+use std::fs;
+use std::fs::{FileType, Metadata};
+use std::io;
+use std::path::Path;
 
-fn get_files(dir_path: &str, flags: &Flags) -> io::Result<Vec<(OsString,FileType, Metadata)>> {
+fn get_files(dir_path: &str, flags: &Flags) -> io::Result<Vec<(OsString, FileType, Metadata)>> {
     //convert to Path obj
     let path = Path::new(dir_path);
 
     //check if directory
-    if !path.is_dir(){
+    if !path.is_dir() {
         return Err(io::Error::new(
-                io::ErrorKind::NotFound,
-                "Provided path is not a directory"
+            io::ErrorKind::NotFound,
+            "Provided path is not a directory",
         ));
     }
 
@@ -30,18 +30,15 @@ fn get_files(dir_path: &str, flags: &Flags) -> io::Result<Vec<(OsString,FileType
             if !is_hidden_folder(entry.path().as_path()) {
                 if let Ok(file_type) = entry.file_type() {
                     if let Ok(file_data) = entry.metadata() {
-                        file_list.push((file_name,file_type,file_data));
+                        file_list.push((file_name, file_type, file_data));
                     }
                 }
             }
-        } else {
-            if let Ok(file_type) = entry.file_type() {
-                if let Ok(file_data) = entry.metadata() {
-                    file_list.push((file_name,file_type,file_data));
-                }
+        } else if let Ok(file_type) = entry.file_type() {
+            if let Ok(file_data) = entry.metadata() {
+                file_list.push((file_name, file_type, file_data));
             }
         }
-
     }
     Ok(file_list)
 }
@@ -60,42 +57,32 @@ fn get_file_mime(filename: &str) -> String {
 }
 
 fn set_file_color(filename: &str) -> ColoredString {
-   match get_file_mime(filename).as_str() {
-       "image" => {
-           filename.to_string().blue()
-       }
-       "text" => {
-           filename.to_string().yellow()
-       }
-       "application" => {
-           filename.to_string().green()
-       }
-       "video" => {
-           filename.to_string().cyan()
-       }
-       &_ => filename.to_string().magenta()
-   }
+    match get_file_mime(filename).as_str() {
+        "image" => filename.to_string().blue(),
+        "text" => filename.to_string().yellow(),
+        "application" => filename.to_string().green(),
+        "video" => filename.to_string().cyan(),
+        &_ => filename.to_string().magenta(),
+    }
 }
 
-fn strify_files(files: &Vec<(OsString,FileType, Metadata)>, flags: &Flags) -> Vec<ColoredString> {
+fn strify_files(files: &Vec<(OsString, FileType, Metadata)>, flags: &Flags) -> Vec<ColoredString> {
     let mut file_strs = Vec::new();
     for file in files {
-        let (file_name,file_type,file_data) = file;
+        let (file_name, file_type, file_data) = file;
         if let Some(file_str) = file_name.to_str() {
             let mut file_str_colored = file_str.to_string().red();
 
             if file_type.is_dir() {
                 file_str_colored = file_str_colored.bold();
+            } else if flags.show_size {
+                let file_size = file_data.len().to_string();
+                //file_str_colored = set_file_color(file_str) + String::from(" ") + file_size;
+                file_str_colored = format!("{} - {}", file_str, file_size).into();
+                file_str_colored = file_str_colored.blue();
+                //println!("{:?}",get_file_mime(file_str));
             } else {
-                if flags.show_size {
-                    let file_size = file_data.len().to_string();
-                    //file_str_colored = set_file_color(file_str) + String::from(" ") + file_size;
-                    file_str_colored = format!("{} - {}",file_str,file_size).into();
-                    file_str_colored = file_str_colored.blue();
-                    //println!("{:?}",get_file_mime(file_str));
-                } else {
-                    file_str_colored = file_str_colored.blue();
-                }
+                file_str_colored = file_str_colored.blue();
             }
             file_strs.push(file_str_colored);
             //file_strs.push(file_str.to_string().red());
@@ -109,7 +96,7 @@ struct Flags {
     show_size: bool,
 }
 
-fn parse_flags(user_input: &String) -> Flags {
+fn parse_flags(user_input: &str) -> Flags {
     let mut program_flags = Flags {
         ignore_hidden: true,
         show_size: false,
@@ -125,20 +112,23 @@ fn parse_flags(user_input: &String) -> Flags {
     program_flags
 }
 
-
 fn main() {
     let args: Vec<String> = env::args().collect();
-    let mut flags = parse_flags(&String::from(""));
+    if args.len() < 2 {
+        println!("Usage: {} <directory> [flags]", args[0]);
+        return;
+    }
+    let mut flags = parse_flags("");
     if args.len() >= 3 {
         flags = parse_flags(&args[2]);
     }
-    match get_files(&args[1],&flags) {
+    match get_files(&args[1], &flags) {
         Ok(files) => {
-            let file_strs = strify_files(&files,&flags);
-            for file in file_strs{
+            let file_strs = strify_files(&files, &flags);
+            for file in file_strs {
                 println!("{}", file);
             }
         }
-        Err(e) => eprintln!("Error listing files: {}",e),
+        Err(e) => eprintln!("Error listing files: {}", e),
     }
 }
