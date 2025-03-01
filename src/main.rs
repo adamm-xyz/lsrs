@@ -77,7 +77,7 @@ fn set_file_color(filename: &str) -> ColoredString {
    }
 }
 
-fn strify_files(files: &Vec<(OsString,FileType, Metadata)>) -> Vec<ColoredString> {
+fn strify_files(files: &Vec<(OsString,FileType, Metadata)>, flags: &Flags) -> Vec<ColoredString> {
     let mut file_strs = Vec::new();
     for file in files {
         let (file_name,file_type,file_data) = file;
@@ -86,13 +86,16 @@ fn strify_files(files: &Vec<(OsString,FileType, Metadata)>) -> Vec<ColoredString
 
             if file_type.is_dir() {
                 file_str_colored = file_str_colored.bold();
-            }
-            else {
-                let file_size = file_data.len().to_string();
-                //file_str_colored = set_file_color(file_str) + String::from(" ") + file_size;
-                file_str_colored = format!("{} - {}",file_str,file_size).into();
-                file_str_colored = file_str_colored.blue();
-                //println!("{:?}",get_file_mime(file_str));
+            } else {
+                if flags.show_size {
+                    let file_size = file_data.len().to_string();
+                    //file_str_colored = set_file_color(file_str) + String::from(" ") + file_size;
+                    file_str_colored = format!("{} - {}",file_str,file_size).into();
+                    file_str_colored = file_str_colored.blue();
+                    //println!("{:?}",get_file_mime(file_str));
+                } else {
+                    file_str_colored = file_str_colored.blue();
+                }
             }
             file_strs.push(file_str_colored);
             //file_strs.push(file_str.to_string().red());
@@ -131,7 +134,7 @@ fn main() {
     }
     match get_files(&args[1],&flags) {
         Ok(files) => {
-            let file_strs = strify_files(&files);
+            let file_strs = strify_files(&files,&flags);
             for file in file_strs{
                 println!("{}", file);
             }
