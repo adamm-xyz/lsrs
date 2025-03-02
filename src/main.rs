@@ -4,7 +4,7 @@ use std::io;
 use std::env;
 use std::ffi::OsString;
 use std::fs::{FileType,Metadata};
-use colored::{Colorize,ColoredString};
+use colored::{Colorize,ColoredString,Color};
 use mime_guess::from_path;
 
 fn get_files(dir_path: &str, flags: &Flags) -> io::Result<Vec<(OsString,FileType, Metadata)>> {
@@ -107,6 +107,13 @@ fn strify_files(files: &Vec<(OsString,FileType, Metadata)>, flags: &Flags) -> Ve
 struct Flags {
     ignore_hidden: bool,
     show_size: bool,
+}
+
+struct FileInfo {
+    name: String,
+    size: u64,
+    is_dir: bool,
+    color: Color,
 }
 
 fn parse_flags(user_input: &String) -> Flags {
