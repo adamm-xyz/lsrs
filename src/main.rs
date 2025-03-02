@@ -7,6 +7,55 @@ use std::fs::{FileType,Metadata};
 use colored::{Colorize,ColoredString,Color};
 use mime_guess::from_path;
 
+struct FileInfo {
+    name: String,
+    size: u64,
+    is_dir: bool,
+    color: Color,
+}
+
+fn get_file_info_list(dir_path: &str, flags: &Flags) -> io::Result<Vec<FileInfo>> {
+    //convert to Path obj
+    let path = Path::new(dir_path);
+
+    //check if directory
+    if !path.is_dir(){
+        return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                "Provided path is not a directory"
+        ));
+    }
+
+    //contents of directory
+    let mut file_list = Vec::new();
+
+    for entry in fs::read_dir(path)? {
+        let entry = entry?;
+        let file_name = entry.file_name();
+
+        if let Some(file_str) = file_name.to_str() {
+            if let Ok(file_type) = entry.file_type() {
+                if let Ok(file_data) = entry.metadata() {
+                    let file_string = file_str.to_string();
+                    let file_size = file_data.len();
+                    let file_is_dir = file_type.is_dir();
+                    let file_color = set_file_color(file_str);
+                    file_list.push(
+                        FileInfo {
+                            name: file_string,
+                            size: file_size,
+                            is_dir: file_is_dir,
+                            color: file_color
+                        }
+                    )
+                }
+            }
+        }
+
+    }
+    Ok(file_list)
+}
+
 fn get_files(dir_path: &str, flags: &Flags) -> io::Result<Vec<(OsString,FileType, Metadata)>> {
     //convert to Path obj
     let path = Path::new(dir_path);
@@ -46,6 +95,7 @@ fn get_files(dir_path: &str, flags: &Flags) -> io::Result<Vec<(OsString,FileType
     Ok(file_list)
 }
 
+
 fn is_hidden_folder(path: &Path) -> bool {
     path.file_name()
         .and_then(|name| name.to_str())
@@ -59,21 +109,21 @@ fn get_file_mime(filename: &str) -> String {
     file_mime_type.to_string()
 }
 
-fn set_file_color(filename: &str) -> ColoredString {
+fn set_file_color(filename: &str) -> Color {
    match get_file_mime(filename).as_str() {
        "image" => {
-           filename.to_string().blue()
+           Color::Blue
        }
        "text" => {
-           filename.to_string().yellow()
+           Color::Yellow
        }
        "application" => {
-           filename.to_string().green()
+           Color::Green
        }
        "video" => {
-           filename.to_string().cyan()
+           Color::Cyan
        }
-       &_ => filename.to_string().magenta()
+       &_ => Color::Magenta
    }
 }
 
@@ -109,12 +159,6 @@ struct Flags {
     show_size: bool,
 }
 
-struct FileInfo {
-    name: String,
-    size: u64,
-    is_dir: bool,
-    color: Color,
-}
 
 fn parse_flags(user_input: &String) -> Flags {
     let mut program_flags = Flags {
