@@ -11,6 +11,7 @@ struct FileInfo {
     name: String,
     size: u64,
     is_dir: bool,
+    is_hidden: bool,
     color: Color,
 }
 
@@ -45,6 +46,7 @@ fn get_file_info_list(dir_path: &str, flags: &Flags) -> io::Result<Vec<FileInfo>
                             name: file_string,
                             size: file_size,
                             is_dir: file_is_dir,
+                            is_hidden: false,
                             color: file_color
                         }
                     )
