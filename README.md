@@ -1,3 +1,5 @@
 # lsrs
 
-ls rewritten in Rust
+`ls` rewritten in Rust.
+
+
