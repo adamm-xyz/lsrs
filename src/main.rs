@@ -149,11 +149,14 @@ Options:
     match get_entries(last, &flags) {
         Ok(entries) => {
             let mut stdout = io::stdout();
-            for entry in entries {
-                entry.print_to(&mut stdout, &flags).unwrap();
+            if let Err(error) = entries.iter().try_for_each(|entry| {
+                let result = entry.print_to(&mut stdout, &flags);
                 println!();
+                result
+            }) {
+                eprintln!("Error printing entries: {error}");
             }
         }
-        Err(e) => eprintln!("Error listing files: {e}"),
+        Err(error) => eprintln!("Error listing entries: {error}"),
     }
 }
