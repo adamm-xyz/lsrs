@@ -6,7 +6,7 @@
 
 ```
 git clone https://github.com/adamm-xyz/lsrs.git
-cd cargo
+cd lsrs
 cargo build
 ```
 
