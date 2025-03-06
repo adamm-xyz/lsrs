@@ -1,3 +1,4 @@
+#![warn(clippy::pedantic, clippy::nursery)]
 use colored::{Color, Colorize};
 use mime_guess::from_path;
 use mime_guess::mime::{APPLICATION, IMAGE, TEXT, VIDEO};
@@ -43,7 +44,7 @@ struct Entry {
 impl Entry {
     fn print_to(&self, writer: &mut impl Write, flags: &Flags) -> io::Result<()> {
         if self.r#type.is_dir() {
-            return write!(writer, "{}", self.name.to_string_lossy().bold().red());
+            return write!(writer, "{}/", self.name.to_string_lossy().bold().red());
         }
         let color = match from_path(&self.name).first_or_octet_stream().type_() {
             IMAGE => Color::Blue,
