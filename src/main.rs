@@ -1,3 +1,4 @@
+#![warn(clippy::pedantic, clippy::nursery)]
 use colored::{Color, Colorize};
 use mime_guess::from_path;
 use mime_guess::mime::{APPLICATION, IMAGE, TEXT, VIDEO};
