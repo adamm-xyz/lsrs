@@ -53,19 +53,43 @@ impl Entry {
             VIDEO => Color::Cyan,
             _ => Color::Magenta,
         };
+        if flags.show_size {
+            if let Some(metadata) = &self.metadata {
+                if flags.human {
+                    write!(
+                        writer,
+                        "{}",
+                        format!("{}\t", bytes_to_human(metadata.len())).color(color)
+                    )?;
+                } else {
+                    write!(
+                        writer,
+                        "{}",
+                        format!("{}\t", metadata.len()).color(color)
+                    )?;
+                }
+            }
+        }
         write!(writer, "{}", self.name.to_string_lossy().color(color))?;
-        if !flags.show_size {
-            return Ok(());
-        }
-        if let Some(metadata) = &self.metadata {
-            write!(
-                writer,
-                "{}",
-                format!("\t{} bytes", metadata.len()).color(color)
-            )?;
-        }
         Ok(())
     }
+}
+
+fn bytes_to_human(bytes: u64) -> String {
+    const UNITS: [&str; 5] = ["B","K","M","G","T"];
+    if bytes == 0 {
+        return String::from("0B");
+    }
+
+    let base: f64 = 1024.0;
+    let bytes = bytes as f64;
+
+    let index = (bytes.log2()/base.log2()).floor();
+    let index = index.min((UNITS.len()-1) as f64);
+
+    let value = bytes/base.powi(index as i32);
+
+    format!("{:.1}{}", value, UNITS[index as usize])
 }
 
 fn get_entries(dir_path: Option<&impl AsRef<OsStr>>, flags: &Flags) -> io::Result<Vec<Entry>> {
@@ -112,6 +136,7 @@ struct Flags {
     show_hidden: bool,
     show_size: bool,
     help: bool,
+    human: bool,
 }
 
 impl Flags {
@@ -119,8 +144,9 @@ impl Flags {
         let has = |flag: &[&str]| flag.iter().any(|flag| args.iter().any(|arg| arg == flag));
         Self {
             show_hidden: has(&["-a", "--all"]),
-            show_size: has(&["-s", "--sizes"]),
-            help: has(&["-h", "--help"]),
+            show_size: has(&["-s", "-sh","--sizes"]),
+            help: has(&["--help"]),
+            human: has(&["-h","-sh"]),
         }
     }
 }
