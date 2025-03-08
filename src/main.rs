@@ -44,6 +44,10 @@ struct Entry {
 
 impl Entry {
     fn print_to(&self, writer: &mut impl Write, flags: &Flags) -> io::Result<()> {
+        if flags.stream_output {
+            write!(writer, "{}", self.name.to_string_lossy())?;
+            return Ok(());
+        }
         if self.r#type.is_dir() {
             if flags.show_size {
                 write!(writer, "\t")?;
@@ -168,11 +172,12 @@ fn is_hidden_folder(path: &Path) -> bool {
 )]
 #[derive(Parser)]
 #[command(
-    // name = env!("CARGO_CRATE_NAME"),
     about = concat!(env!("CARGO_CRATE_NAME"), " - list directory contents"),
     disable_help_flag=true
 )]
 struct Flags {
+    #[arg(long, action(ArgAction::Help), help = "show this help message")]
+    help: (),
     #[arg(
         short = 'a',
         long = "all",
@@ -185,8 +190,6 @@ struct Flags {
         help = "show sizes of files; use -h for human-readable units"
     )]
     show_size: bool,
-    #[arg(long, action(ArgAction::Help), help = "show this help message")]
-    help: (),
     #[arg(
         short = 'h',
         long = "human",
@@ -211,6 +214,8 @@ struct Flags {
         help = "sort by time modified, newest first (specify -r for oldest first)"
     )]
     sort_by_modified_time: bool,
+    #[arg(short = 'm', long, help = "list files separated by `, `")]
+    stream_output: bool,
     #[arg(help = "path to list entries from")]
     path: Option<PathBuf>,
 }
@@ -220,9 +225,16 @@ fn main() {
     match get_entries(flags.path.as_deref(), &flags) {
         Ok(entries) => {
             let mut stdout = io::stdout();
-            if let Err(error) = entries.iter().try_for_each(|entry| {
+            if let Err(error) = entries.iter().enumerate().try_for_each(|(index, entry)| {
+                if index != 0 && flags.stream_output {
+                    write!(stdout, ", ")?;
+                }
                 let result = entry.print_to(&mut stdout, &flags);
-                println!();
+                if flags.stream_output {
+                    stdout.flush()?;
+                } else {
+                    println!();
+                }
                 result
             }) {
                 eprintln!("Error printing entries: {error}");
