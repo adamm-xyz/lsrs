@@ -1,15 +1,16 @@
 #![warn(clippy::pedantic, clippy::nursery)]
+use clap::{ArgAction, Parser};
 use colored::{Color, Colorize};
 use mime_guess::from_path;
 use mime_guess::mime::{APPLICATION, IMAGE, TEXT, VIDEO};
-use std::ffi::{OsStr, OsString};
+use std::ffi::OsString;
 use std::fs::Metadata;
 use std::fs::{self, metadata};
-use std::io::Write;
-use std::path::Path;
+use std::io::{Stdout, Write};
+use std::path::{Path, PathBuf};
 use std::{env, io};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum FileType {
     Dir,
     File,
@@ -43,7 +44,14 @@ struct Entry {
 
 impl Entry {
     fn print_to(&self, writer: &mut impl Write, flags: &Flags) -> io::Result<()> {
+        if flags.stream_output {
+            write!(writer, "{}", self.name.to_string_lossy())?;
+            return Ok(());
+        }
         if self.r#type.is_dir() {
+            if flags.show_size {
+                write!(writer, "\t")?;
+            }
             return write!(writer, "{}/", self.name.to_string_lossy().bold().red());
         }
         let color = match from_path(&self.name).first_or_octet_stream().type_() {
@@ -55,19 +63,16 @@ impl Entry {
         };
         if flags.show_size {
             if let Some(metadata) = &self.metadata {
-                if flags.human {
-                    write!(
-                        writer,
-                        "{}",
-                        format!("{}\t", bytes_to_human(metadata.len())).color(color)
-                    )?;
-                } else {
-                    write!(
-                        writer,
-                        "{}",
-                        format!("{}\t", metadata.len()).color(color)
-                    )?;
-                }
+                write!(
+                    writer,
+                    "{}",
+                    if flags.human {
+                        format!("{}\t", bytes_to_human(metadata.len()))
+                    } else {
+                        format!("{}\t", metadata.len())
+                    }
+                    .color(color)
+                )?;
             }
         }
         write!(writer, "{}", self.name.to_string_lossy().color(color))?;
@@ -76,23 +81,28 @@ impl Entry {
 }
 
 fn bytes_to_human(bytes: u64) -> String {
-    const UNITS: [&str; 5] = ["B","K","M","G","T"];
+    const UNITS: [&str; 5] = ["B", "K", "M", "G", "T"];
     if bytes == 0 {
         return String::from("0B");
     }
-
-    let base: f64 = 1024.0;
-    let bytes = bytes as f64;
-
-    let index = (bytes.log2()/base.log2()).floor();
-    let index = index.min((UNITS.len()-1) as f64);
-
-    let value = bytes/base.powi(index as i32);
-
-    format!("{:.1}{}", value, UNITS[index as usize])
+    let index = (bytes.ilog(1024) as usize).min(UNITS.len() - 1);
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_possible_wrap,
+        reason = "index is never more than `UNITS.len() - 1`"
+    )]
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "files probably won't be that big, and precision won't matter by that point"
+    )]
+    let value = bytes as f64 / 1024_f64.powi(index as i32);
+    if index == 0 {
+        return format!("{}{}", value, UNITS[index]);
+    }
+    format!("{:.1}{}", value, UNITS[index])
 }
 
-fn get_entries(dir_path: Option<&impl AsRef<OsStr>>, flags: &Flags) -> io::Result<Vec<Entry>> {
+fn get_entries(dir_path: Option<&Path>, flags: &Flags) -> io::Result<Vec<Entry>> {
     // Convert `dir_path` to Path object
     let path = dir_path.as_ref().map(Path::new);
 
@@ -110,7 +120,7 @@ fn get_entries(dir_path: Option<&impl AsRef<OsStr>>, flags: &Flags) -> io::Resul
         }
     }
 
-    Ok(fs::read_dir(path.unwrap_or_else(|| Path::new(".")))?
+    let mut entries: Vec<_> = fs::read_dir(path.unwrap_or_else(|| Path::new(".")))?
         .flatten()
         .filter_map(|entry| {
             let name = entry.file_name();
@@ -123,7 +133,31 @@ fn get_entries(dir_path: Option<&impl AsRef<OsStr>>, flags: &Flags) -> io::Resul
                 metadata: entry.metadata().ok(),
             })
         })
-        .collect())
+        .collect();
+    if flags.sort_by_size || flags.sort_by_modified_time {
+        entries.sort_unstable_by(|a, b| {
+            let key = |entry: &Entry| {
+                let metadata = entry.metadata.as_ref();
+                (
+                    metadata
+                        .map(std::fs::Metadata::len)
+                        .map(|size| u64::MAX - size)
+                        .filter(|_| flags.sort_by_size),
+                    metadata
+                        .map(std::fs::Metadata::modified)
+                        .and_then(Result::ok)
+                        .and_then(|time| time.elapsed().ok())
+                        .filter(|_| flags.sort_by_modified_time),
+                )
+            };
+            let mut ordering = Ord::cmp(&key(a), &key(b));
+            if flags.reverse_sort {
+                ordering = ordering.reverse();
+            }
+            Ord::cmp(&a.r#type, &b.r#type).then(ordering)
+        });
+    }
+    Ok(entries)
 }
 
 fn is_hidden_folder(path: &Path) -> bool {
@@ -132,53 +166,75 @@ fn is_hidden_folder(path: &Path) -> bool {
 }
 
 #[derive(Debug, Default)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "this is not a state machine, but a set of flags"
+)]
+#[derive(Parser)]
+#[command(
+    about = concat!(env!("CARGO_CRATE_NAME"), " - list directory contents"),
+    disable_help_flag=true
+)]
 struct Flags {
+    #[arg(long, action(ArgAction::Help), help = "show this help message")]
+    help: (),
+    #[arg(
+        short = 'a',
+        long = "all",
+        help = "do not ignore entries starting with `.`"
+    )]
     show_hidden: bool,
+    #[arg(
+        short = 's',
+        long = "sizes",
+        help = "show sizes of files; use -h for human-readable units"
+    )]
     show_size: bool,
-    help: bool,
+    #[arg(
+        short = 'h',
+        long = "human",
+        help = "print sizes in human-readable units"
+    )]
     human: bool,
-}
-
-impl Flags {
-    fn from_args(args: &[String]) -> Self {
-        let has = |flag: &[&str]| flag.iter().any(|flag| args.iter().any(|arg| arg == flag));
-        Self {
-            show_hidden: has(&["-a", "--all"]),
-            show_size: has(&["-s", "-sh","--sizes"]),
-            help: has(&["--help"]),
-            human: has(&["-h","-sh"]),
-        }
-    }
+    #[arg(
+        short = 'r',
+        long = "reverse",
+        help = "reverse order when sorting (-S, -t)"
+    )]
+    reverse_sort: bool,
+    #[arg(
+        short = 'S',
+        long = "sort-size",
+        help = "sort by file size, largest first (specify -r for smallest first)"
+    )]
+    sort_by_size: bool,
+    #[arg(
+        short = 't',
+        long = "sort-mtime",
+        help = "sort by time modified, newest first (specify -r for oldest first)"
+    )]
+    sort_by_modified_time: bool,
+    #[arg(short = 'm', long, help = "list files separated by `, `")]
+    stream_output: bool,
+    #[arg(help = "path to list entries from")]
+    path: Option<PathBuf>,
 }
 
 fn main() {
-    let args: Vec<_> = env::args().collect();
-    let (command, all_args) = args.split_first().unzip();
-    let command = command.map_or(env!("CARGO_CRATE_NAME"), |command| command);
-    let (mut last, args) = all_args.unwrap_or_default().split_last().unzip();
-    let flags = if last.is_some_and(|last| last.starts_with('-')) {
-        last = None;
-        all_args.map(Flags::from_args).unwrap_or_default()
-    } else {
-        args.map(Flags::from_args).unwrap_or_default()
-    };
-    if flags.help {
-        println!(
-            "{command} - list directory contents
-Usage: {command} [options] [PATH]
-Options:
-    -a, --all    \tdo not ignore entries starting with `.`\t[default: false]
-    -s, --sizes    \tshow sizes of files in bytes\t\t[default: false]
-    -h, --help    \tprint this help message",
-        );
-        return;
-    }
-    match get_entries(last, &flags) {
+    let flags = Flags::parse();
+    match get_entries(flags.path.as_deref(), &flags) {
         Ok(entries) => {
             let mut stdout = io::stdout();
-            if let Err(error) = entries.iter().try_for_each(|entry| {
+            if let Err(error) = entries.iter().enumerate().try_for_each(|(index, entry)| {
+                if index != 0 && flags.stream_output {
+                    write!(stdout, ", ")?;
+                }
                 let result = entry.print_to(&mut stdout, &flags);
-                println!();
+                if flags.stream_output {
+                    stdout.flush()?;
+                } else {
+                    println!();
+                }
                 result
             }) {
                 eprintln!("Error printing entries: {error}");
