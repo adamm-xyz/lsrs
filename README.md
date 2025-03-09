@@ -27,7 +27,7 @@ cargo build
 - [x] Add show hidden entries (-a)
 - [x] Add show size of files in bytes (-s)
 - [x] Add help message (--help)
-- [ ] Add human-readable option (-h)
+- [x] Add human-readable option (-H)
 - [ ] Add reverse order when sorting (-r)
 - [ ] Add list subdirectories recursively (-R)
 - [ ] Add sort by file size, largest first (-S)
