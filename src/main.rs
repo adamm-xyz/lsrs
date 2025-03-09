@@ -1,4 +1,5 @@
 #![warn(clippy::pedantic, clippy::nursery)]
+#![allow(clippy::struct_excessive_bools)]
 use colored::{Color, Colorize};
 use mime_guess::from_path;
 use mime_guess::mime::{APPLICATION, IMAGE, TEXT, VIDEO};
@@ -61,10 +62,33 @@ impl Entry {
             write!(
                 writer,
                 "{}",
-                format!("\t{} bytes", metadata.len()).color(color)
+                if flags.human_readable {
+                    format!("\t{}", human_readable_size(metadata.len())).color(color)
+                } else {
+                    format!("\t{} bytes", metadata.len()).color(color)
+                }
             )?;
         }
         Ok(())
+    }
+}
+
+fn human_readable_size(bytes: u64) -> String {
+    const KB: f64 = 1024.0;
+    const MB: f64 = KB * 1024.0;
+    const GB: f64 = MB * 1024.0;
+
+    #[allow(clippy::cast_precision_loss)]
+    let size = bytes as f64;
+
+    if size >= GB {
+        format!("{:.2} GiB", size / GB)
+    } else if size >= MB {
+        format!("{:.2} MiB", size / MB)
+    } else if size >= KB {
+        format!("{:.2} KiB", size / KB)
+    } else {
+        format!("{bytes} bytes")
     }
 }
 
@@ -111,43 +135,47 @@ fn is_hidden_folder(path: &Path) -> bool {
 struct Flags {
     show_hidden: bool,
     show_size: bool,
+    human_readable: bool,
     help: bool,
 }
 
 impl Flags {
-    fn from_args(args: &[String]) -> Self {
-        let has = |flag: &[&str]| flag.iter().any(|flag| args.iter().any(|arg| arg == flag));
-        Self {
-            show_hidden: has(&["-a", "--all"]),
-            show_size: has(&["-s", "--sizes"]),
-            help: has(&["-h", "--help"]),
+    fn from_args(args: &[String]) -> (Self, Option<String>) {
+        let mut flags = Self::default();
+        let mut path = None;
+
+        for arg in args {
+            match arg.as_str() {
+                "-a" | "--all" => flags.show_hidden = true,
+                "-s" | "--sizes" => flags.show_size = true,
+                "-H" | "--human-readable" => flags.human_readable = true,
+                "-h" | "--help" => flags.help = true,
+                _ if !arg.starts_with('-') => path = Some(arg.clone()),
+                _ => {}
+            }
         }
+        (flags, path)
     }
 }
 
 fn main() {
-    let args: Vec<_> = env::args().collect();
-    let (command, all_args) = args.split_first().unzip();
-    let command = command.map_or(env!("CARGO_CRATE_NAME"), |command| command);
-    let (mut last, args) = all_args.unwrap_or_default().split_last().unzip();
-    let flags = if last.is_some_and(|last| last.starts_with('-')) {
-        last = None;
-        all_args.map(Flags::from_args).unwrap_or_default()
-    } else {
-        args.map(Flags::from_args).unwrap_or_default()
-    };
+    let args: Vec<_> = env::args().skip(1).collect();
+    let (flags, path) = Flags::from_args(&args);
+
     if flags.help {
+        let command = env!("CARGO_CRATE_NAME");
         println!(
             "{command} - list directory contents
 Usage: {command} [options] [PATH]
 Options:
-    -a, --all    \tdo not ignore entries starting with `.`\t[default: false]
-    -s, --sizes    \tshow sizes of files in bytes\t\t[default: false]
-    -h, --help    \tprint this help message",
+    -a, --all\t\t\tdo not ignore entries starting with `.` [default: false]
+    -s, --sizes\t\t\tshow sizes of files in bytes [default: false]
+    -H, --human-readable\tshow sizes of files in human readable format [default: false]
+    -h, --help\t\t\tprint this help message",
         );
         return;
     }
-    match get_entries(last, &flags) {
+    match get_entries(path.as_ref(), &flags) {
         Ok(entries) => {
             let mut stdout = io::stdout();
             if let Err(error) = entries.iter().try_for_each(|entry| {
