@@ -6,7 +6,7 @@ use mime_guess::mime::{APPLICATION, IMAGE, TEXT, VIDEO};
 use std::ffi::OsString;
 use std::fs::Metadata;
 use std::fs::{self, metadata};
-use std::io::{Stdout, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::{env, io};
 
