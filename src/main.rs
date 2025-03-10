@@ -6,10 +6,11 @@ use mime_guess::mime::{APPLICATION, IMAGE, TEXT, VIDEO};
 use std::ffi::OsString;
 use std::fs::Metadata;
 use std::fs::{self, metadata};
-use std::io::{Stdout, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::{env, io};
 
+/// Enum to represent directories or files
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum FileType {
     Dir,
@@ -36,6 +37,7 @@ impl FileType {
     }
 }
 
+/// Represents a File or a Dir with all the metadata
 struct Entry {
     name: OsString,
     r#type: FileType,
@@ -43,17 +45,22 @@ struct Entry {
 }
 
 impl Entry {
+    /// Prints the file or directory into writer depending on the flags
     fn print_to(&self, writer: &mut impl Write, flags: &Flags) -> io::Result<()> {
+        // stream_output flag returnst the files and directories as a comma separated list
         if flags.stream_output {
             write!(writer, "{}", self.name.to_string_lossy())?;
             return Ok(());
         }
+
         if self.r#type.is_dir() {
             if flags.show_size {
+                // Skip sizes on directories
                 write!(writer, "\t")?;
             }
             return write!(writer, "{}/", self.name.to_string_lossy().bold().red());
         }
+
         let color = match from_path(&self.name).first_or_octet_stream().type_() {
             IMAGE => Color::Blue,
             TEXT => Color::Yellow,
@@ -61,6 +68,7 @@ impl Entry {
             VIDEO => Color::Cyan,
             _ => Color::Magenta,
         };
+
         if flags.show_size {
             if let Some(metadata) = &self.metadata {
                 write!(
@@ -75,11 +83,14 @@ impl Entry {
                 )?;
             }
         }
+
         write!(writer, "{}", self.name.to_string_lossy().color(color))?;
+
         Ok(())
     }
 }
 
+/// Converts bytes into human readable format like 2.5KB
 fn bytes_to_human(bytes: u64) -> String {
     const UNITS: [&str; 5] = ["B", "K", "M", "G", "T"];
     if bytes == 0 {
