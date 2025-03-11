@@ -47,7 +47,7 @@ struct Entry {
 impl Entry {
     /// Prints the file or directory into writer depending on the flags
     fn print_to(&self, writer: &mut impl Write, flags: &Flags) -> io::Result<()> {
-        // stream_output flag returnst the files and directories as a comma separated list
+        // stream_output flag returns the files and directories as a comma separated list
         if flags.stream_output {
             write!(writer, "{}", self.name.to_string_lossy())?;
             return Ok(());
@@ -61,6 +61,7 @@ impl Entry {
             return write!(writer, "{}/", self.name.to_string_lossy().bold().red());
         }
 
+        // Entries are color coded based on file type
         let color = match from_path(&self.name).first_or_octet_stream().type_() {
             IMAGE => Color::Blue,
             TEXT => Color::Yellow,
@@ -131,6 +132,7 @@ fn get_entries(dir_path: Option<&Path>, flags: &Flags) -> io::Result<Vec<Entry>>
         }
     }
 
+    // Collect entries into vector, ignoring hidden entries if show_hidden is false
     let mut entries: Vec<_> = fs::read_dir(path.unwrap_or_else(|| Path::new(".")))?
         .flatten()
         .filter_map(|entry| {
@@ -145,6 +147,8 @@ fn get_entries(dir_path: Option<&Path>, flags: &Flags) -> io::Result<Vec<Entry>>
             })
         })
         .collect();
+
+    // Sort the entries by relevant flag (by size or by time modified)
     if flags.sort_by_size || flags.sort_by_modified_time {
         entries.sort_unstable_by(|a, b| {
             let key = |entry: &Entry| {
@@ -162,6 +166,7 @@ fn get_entries(dir_path: Option<&Path>, flags: &Flags) -> io::Result<Vec<Entry>>
                 )
             };
             let mut ordering = Ord::cmp(&key(a), &key(b));
+            // Reversing
             if flags.reverse_sort {
                 ordering = ordering.reverse();
             }
@@ -171,6 +176,7 @@ fn get_entries(dir_path: Option<&Path>, flags: &Flags) -> io::Result<Vec<Entry>>
     Ok(entries)
 }
 
+// Checks if given Path is 'hidden' (starts with '.')
 fn is_hidden_folder(path: &Path) -> bool {
     path.file_name()
         .is_some_and(|name| name.as_encoded_bytes()[0] == b'.')
@@ -232,14 +238,17 @@ struct Flags {
 }
 
 fn main() {
+    // Get flags and entries from given path on command line
     let flags = Flags::parse();
     match get_entries(flags.path.as_deref(), &flags) {
         Ok(entries) => {
             let mut stdout = io::stdout();
             if let Err(error) = entries.iter().enumerate().try_for_each(|(index, entry)| {
+                // Comma separate
                 if index != 0 && flags.stream_output {
                     write!(stdout, ", ")?;
                 }
+                // Print entries
                 let result = entry.print_to(&mut stdout, &flags);
                 if flags.stream_output {
                     stdout.flush()?;
