@@ -1,14 +1,15 @@
 #![warn(clippy::pedantic, clippy::nursery)]
-use clap::{ArgAction, Parser};
+
 use colored::{Color, Colorize};
 use mime_guess::from_path;
 use mime_guess::mime::{APPLICATION, IMAGE, TEXT, VIDEO};
+
 use std::ffi::OsString;
-use std::fs::Metadata;
-use std::fs::{self, metadata};
-use std::io::Write;
-use std::path::{Path, PathBuf};
-use std::{env, io};
+use std::fs::{self, metadata, Metadata};
+use std::io::{self, Write};
+use std::path::Path;
+
+use lsrs::cli::Flags;
 
 /// Enum to represent directories or files
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -182,64 +183,10 @@ fn is_hidden_folder(path: &Path) -> bool {
         .is_some_and(|name| name.as_encoded_bytes()[0] == b'.')
 }
 
-#[derive(Debug, Default)]
-#[allow(
-    clippy::struct_excessive_bools,
-    reason = "this is not a state machine, but a set of flags"
-)]
-#[derive(Parser)]
-#[command(
-    about = concat!(env!("CARGO_CRATE_NAME"), " - list directory contents"),
-    disable_help_flag=true
-)]
-struct Flags {
-    #[arg(long, action(ArgAction::Help), help = "show this help message")]
-    help: (),
-    #[arg(
-        short = 'a',
-        long = "all",
-        help = "do not ignore entries starting with `.`"
-    )]
-    show_hidden: bool,
-    #[arg(
-        short = 's',
-        long = "sizes",
-        help = "show sizes of files; use -h for human-readable units"
-    )]
-    show_size: bool,
-    #[arg(
-        short = 'h',
-        long = "human",
-        help = "print sizes in human-readable units"
-    )]
-    human: bool,
-    #[arg(
-        short = 'r',
-        long = "reverse",
-        help = "reverse order when sorting (-S, -t)"
-    )]
-    reverse_sort: bool,
-    #[arg(
-        short = 'S',
-        long = "sort-size",
-        help = "sort by file size, largest first (specify -r for smallest first)"
-    )]
-    sort_by_size: bool,
-    #[arg(
-        short = 't',
-        long = "sort-mtime",
-        help = "sort by time modified, newest first (specify -r for oldest first)"
-    )]
-    sort_by_modified_time: bool,
-    #[arg(short = 'm', long, help = "list files separated by `, `")]
-    stream_output: bool,
-    #[arg(help = "path to list entries from")]
-    path: Option<PathBuf>,
-}
 
 fn main() {
     // Get flags and entries from given path on command line
-    let flags = Flags::parse();
+    let flags = Flags::from_args();
     match get_entries(flags.path.as_deref(), &flags) {
         Ok(entries) => {
             let mut stdout = io::stdout();
