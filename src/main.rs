@@ -1,14 +1,13 @@
-// #![warn(clippy::pedantic, clippy::nursery)]
+#![warn(clippy::pedantic, clippy::nursery)]
 
 use colored::{Color, Colorize};
 use mime_guess::from_path;
 use mime_guess::mime::{APPLICATION, IMAGE, TEXT, VIDEO};
+
 use std::ffi::OsString;
-use std::fs::Metadata;
-use std::fs::{self, metadata};
-use std::io::Write;
-use std::path::{Path, PathBuf};
-use std::{env, io};
+use std::fs::{self, metadata, Metadata};
+use std::io::{self, Write};
+use std::path::Path;
 
 use lsrs::cli::Flags;
 
