@@ -2,6 +2,8 @@
 
 `ls` rewritten in Rust. Lists directory contents, just like the original.
 
+![vhs demo](https://raw.githubusercontent.com/adamm-xyz/lsrs/raw/main/demo.gif)
+
 ## Compile from Source
 
 ```sh
