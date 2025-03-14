@@ -7,3 +7,6 @@ edition = "2021"
 clap = { version = "4.5.31", features = ["derive"] }
 colored = "3.0.0"
 mime_guess = "2.0.5"
+
+[dev-dependencies]
+pretty_assertions = "1.4.1"
