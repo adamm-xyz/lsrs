@@ -1,5 +1,5 @@
 use pretty_assertions::assert_eq; 
-    use clap::CommandFactory;
+use clap::CommandFactory;
 
 use lsrs::cli::Flags;
 
