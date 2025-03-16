@@ -12,7 +12,7 @@ use std::time::SystemTime;
 
 use lsrs::cli::Flags;
 
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{TimeZone, Utc};
 
 
 /// Enum to represent directories or files
