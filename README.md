@@ -1,8 +1,29 @@
 # lsrs
 
+<div align="center">
+  <p>
+    <a href="https://github.com/adamm-xyz/lsrs" target="_blank">
+      <img width="100%" src="https://raw.githubusercontent.com/adamm-xyz/lsrs/refs/heads/main/demo.gif" alt="lsrs demo banner"></a>
+  </p>
+
+<div>
+    <a href="https://github.com/adamm-xyz/lsrs/actions/workflows/rust_unit_tests.yml"><img src="https://img.shields.io/github/actions/workflow/status/adamm-xyz/lsrs/rust_unit_tests.yml
+" alt="Rust unit test workflow status"></a>
+    <img alt="GitHub top language" src="https://img.shields.io/github/languages/top/adamm-xyz/lsrs">
+    <img alt="GitHub repo size" src="https://img.shields.io/github/repo-size/adamm-xyz/lsrs">
+    <img alt="Github Repo stars" src="https://img.shields.io/github/stars/adamm-xyz/lsrs?style=flat">
+    <img alt="GitHub forks" src="https://img.shields.io/github/forks/adamm-xyz/lsrs?style=flat">
+    <a href="https://github.com/adamm-xyz/lsrs/issues"><img alt="GitHub issues" src="https://img.shields.io/github/issues/adamm-xyz/lsrs?style=flat"></a>
+    <br>
+<br>
+</div>
+<br>
+
+</div>
+
 `ls` rewritten in Rust. Lists directory contents, just like the original.
 
-![vhs demo](https://raw.githubusercontent.com/adamm-xyz/lsrs/refs/heads/main/demo.gif)
+
 
 ## Compile from Source
 
