@@ -43,6 +43,7 @@ fn test_help_msg() {
         "  -h, --human          print sizes in human-readable units",
         "  -r, --reverse        reverse order when sorting (-S, -t)",
         "  -S, --sort-size      sort by file size, largest first (specify -r for smallest first)",
+        "  -T, --show-time      show time (-T)",
         "  -t, --sort-mtime     sort by time modified, newest first (specify -r for oldest first)",
         "  -m, --stream-output  list files separated by `, `",
     ]);
