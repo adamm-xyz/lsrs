@@ -8,7 +8,8 @@ use std::ffi::OsString;
 use std::fs::{self, metadata, Metadata};
 use std::io::{self, Write};
 use std::path::Path;
-use std::time::SystemTime;
+use std::time::{SystemTime};
+use time::OffsetDateTime;
 
 use lsrs::cli::Flags;
 
@@ -65,10 +66,7 @@ impl Entry {
                     "{}",
                     match metadata.modified() {
                         Ok(modified_time) => {
-                            match modified_time.duration_since(SystemTime::UNIX_EPOCH) {
-                                Ok(elapsed) => format!("{}\t",format_timestamp(elapsed.as_secs() as i64)),
-                                Err(e) => format!("Error: {e:?}")
-                            }
+                            format!("{}\t", get_file_date(modified_time))
                         }
                         Err(e) => format!("Error: {e:?}")
                     }
@@ -135,6 +133,11 @@ fn bytes_to_human(bytes: u64) -> String {
         return format!("{}{}", value, UNITS[index]);
     }
     format!("{:.1}{}", value, UNITS[index])
+}
+
+fn get_file_date(modified_time: SystemTime) -> String {
+    let file_timestamp_secs = modified_time.duration_since(SystemTime::UNIX_EPOCH).expect("REASON").as_secs();
+    format_timestamp(file_timestamp_secs.try_into().unwrap())
 }
 
 //Converts time since UNIX EPOCH to human readable string Ex: Sep 10 14:23
