@@ -136,8 +136,13 @@ fn bytes_to_human(bytes: u64) -> String {
 }
 
 fn get_file_date(modified_time: SystemTime) -> String {
-    let file_timestamp_secs = modified_time.duration_since(SystemTime::UNIX_EPOCH).expect("REASON").as_secs();
-    format_timestamp(file_timestamp_secs.try_into().unwrap())
+    match modified_time.duration_since(SystemTime::UNIX_EPOCH) { 
+        Ok(time_since_epoch) => {
+            let file_timestamp_secs = time_since_epoch.as_secs();
+            format_timestamp(file_timestamp_secs as i64)
+        }
+        Err(e) => format!("Error: {e:?}")
+    }
 }
 
 //Converts time since UNIX EPOCH to human readable string Ex: Sep 10 14:23
