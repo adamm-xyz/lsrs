@@ -8,7 +8,7 @@ clap = { version = "4.5.31", features = ["derive"] }
 colored = "3.0.0"
 mime_guess = "2.0.5"
 chrono = "0.4"
-time = { version = "0.3", features = ["macros","local-offset"] }
+time = { version = "0.3.40", features = ["macros","local-offset","formatting"] }
 
 [dev-dependencies]
 pretty_assertions = "1.4.1"

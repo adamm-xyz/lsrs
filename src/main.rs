@@ -9,11 +9,11 @@ use std::fs::{self, metadata, Metadata};
 use std::io::{self, Write};
 use std::path::Path;
 use std::time::{SystemTime};
-use time::OffsetDateTime;
+//use time::{OffsetDateTime,format_description};
 
 use lsrs::cli::Flags;
 
-use chrono::{TimeZone, Utc};
+use chrono::{TimeZone, Local};
 
 
 /// Enum to represent directories or files
@@ -135,20 +135,17 @@ fn bytes_to_human(bytes: u64) -> String {
     format!("{:.1}{}", value, UNITS[index])
 }
 
+//Converts SystemTime of file metadata to readable string EX: Sep 10 14:23
 fn get_file_date(modified_time: SystemTime) -> String {
     match modified_time.duration_since(SystemTime::UNIX_EPOCH) { 
         Ok(time_since_epoch) => {
-            let file_timestamp_secs = time_since_epoch.as_secs();
-            format_timestamp(file_timestamp_secs as i64)
+            let secs = time_since_epoch.as_secs() as i64;
+            let nsecs = time_since_epoch.subsec_nanos();
+            let timestamp = Local.timestamp_opt(secs,nsecs).unwrap();
+            timestamp.format("%b %d %H:%M").to_string()
         }
         Err(e) => format!("Error: {e:?}")
     }
-}
-
-//Converts time since UNIX EPOCH to human readable string Ex: Sep 10 14:23
-fn format_timestamp(timestamp: i64) -> String {
-    let datetime = Utc.timestamp_opt(timestamp, 0).unwrap();
-    datetime.format("%b %d %H:%M").to_string()
 }
 
 fn get_entries(dir_path: Option<&Path>, flags: &Flags) -> io::Result<Vec<Entry>> {
