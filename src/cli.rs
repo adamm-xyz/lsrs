@@ -37,9 +37,9 @@ pub struct Flags {
     #[arg(short = 'S', long = "sort-size")]
     pub sort_by_size: bool,
 
-    /// show time (-T)
-    #[arg(short = 'T', long = "show-time")]
-    pub show_time: bool,
+    /// long listing (-l)
+    #[arg(short = 'l', long)]
+    pub long_listing: bool,
 
     /// sort by time modified, newest first (specify -r for oldest first)
     #[arg(short = 't', long = "sort-mtime")]

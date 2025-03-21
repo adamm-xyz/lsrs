@@ -9,12 +9,13 @@ use std::fs::{self, metadata, Metadata};
 use std::io::{self, Write};
 use std::path::Path;
 use std::time::{SystemTime};
-//use time::{OffsetDateTime,format_description};
+use std::os::unix::fs::MetadataExt;
 
 use lsrs::cli::Flags;
 
 use chrono::{TimeZone, Local};
 
+use users::{get_user_by_uid, get_group_by_gid};
 
 /// Enum to represent directories or files
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -59,20 +60,28 @@ impl Entry {
             return Ok(());
         }
 
-        if flags.show_time {
+        if flags.long_listing {
             if let Some(metadata) = &self.metadata {
                 write!(
                     writer,
                     "{}",
+                    match get_file_owner_and_group(metadata){
+                        Ok(owner_string) => format!("{} {} ",owner_string.0,owner_string.1),
+                        Err(e) => format!("Error: {e:?}")
+                    }
+                )?;
+                write!(
+                    writer,
+                    "{}",
                     match metadata.modified() {
-                        Ok(modified_time) => {
-                            format!("{}\t", get_file_date(modified_time))
-                        }
+                        Ok(modified_time) => format!("{}\t", 
+                            get_file_date(modified_time)),
                         Err(e) => format!("Error: {e:?}")
                     }
                 )?;
             }
         }
+
 
         if self.r#type.is_dir() {
             if flags.show_size {
@@ -135,7 +144,7 @@ fn bytes_to_human(bytes: u64) -> String {
     format!("{:.1}{}", value, UNITS[index])
 }
 
-//Converts SystemTime of file metadata to readable string EX: Sep 10 14:23
+/// Converts SystemTime of file metadata to readable string EX: Sep 10 14:23
 fn get_file_date(modified_time: SystemTime) -> String {
     match modified_time.duration_since(SystemTime::UNIX_EPOCH) { 
         Ok(time_since_epoch) => {
@@ -146,6 +155,24 @@ fn get_file_date(modified_time: SystemTime) -> String {
         }
         Err(e) => format!("Error: {e:?}")
     }
+}
+
+/// Gets the owner and group names associated with a file
+pub fn get_file_owner_and_group(meta: &Metadata) -> io::Result<(String, String)> {
+    // Get owner and group IDs
+    let uid = meta.uid();
+    let gid = meta.gid();
+
+    // Look up the user and group names
+    let owner_name = get_user_by_uid(uid)
+        .map(|user| user.name().to_string_lossy().into_owned())
+        .unwrap_or_else(|| uid.to_string());
+
+    let group_name = get_group_by_gid(gid)
+        .map(|group| group.name().to_string_lossy().into_owned())
+        .unwrap_or_else(|| gid.to_string());
+
+    Ok((owner_name, group_name))
 }
 
 fn get_entries(dir_path: Option<&Path>, flags: &Flags) -> io::Result<Vec<Entry>> {
