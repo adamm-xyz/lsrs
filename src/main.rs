@@ -65,6 +65,11 @@ impl Entry {
                 write!(
                     writer,
                     "{}",
+                    format!("{} ", metadata.nlink())
+                )?;
+                write!(
+                    writer,
+                    "{}",
                     match get_file_owner_and_group(metadata){
                         Ok(owner_string) => format!("{} {} ",owner_string.0,owner_string.1),
                         Err(e) => format!("Error: {e:?}")
