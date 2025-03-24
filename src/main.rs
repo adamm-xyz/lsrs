@@ -78,6 +78,15 @@ impl Entry {
                 write!(
                     writer,
                     "{}",
+                    if flags.human {
+                        format!("{} ", bytes_to_human(metadata.len()))
+                    } else {
+                        format!("{} ", metadata.len())
+                    }
+                )?;
+                write!(
+                    writer,
+                    "{}",
                     match metadata.modified() {
                         Ok(modified_time) => format!("{}\t", 
                             get_file_date(modified_time)),
