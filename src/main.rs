@@ -9,7 +9,8 @@ use std::fs::{self, metadata, Metadata};
 use std::io::{self, Write};
 use std::path::Path;
 use std::time::{SystemTime};
-use std::os::unix::fs::MetadataExt;
+use std::os::unix::fs::{MetadataExt,PermissionsExt};
+use libc::{S_IRGRP, S_IROTH, S_IRUSR, S_IWGRP, S_IWOTH, S_IWUSR, S_IXGRP, S_IXOTH, S_IXUSR};
 
 use lsrs::cli::Flags;
 
@@ -62,6 +63,11 @@ impl Entry {
 
         if flags.long_listing {
             if let Some(metadata) = &self.metadata {
+                write!(
+                    writer,
+                    "{}",
+                    format!("{} ", parse_permissions(metadata.permissions().mode()))
+                )?;
                 write!(
                     writer,
                     "{}",
@@ -187,6 +193,28 @@ pub fn get_file_owner_and_group(meta: &Metadata) -> io::Result<(String, String)>
         .unwrap_or_else(|| gid.to_string());
 
     Ok((owner_name, group_name))
+}
+
+/// Helper functions to get and parse permissions of entries
+/// Credit to Matthias Endler at endler.dev
+fn parse_permissions(mode: u32) -> String {
+    let user = triplet(mode, S_IRUSR, S_IWUSR, S_IXUSR);
+    let group = triplet(mode, S_IRGRP, S_IWGRP, S_IXGRP);
+    let other = triplet(mode, S_IROTH, S_IWOTH, S_IXOTH);
+    [user, group, other].join("")
+}
+
+fn triplet(mode: u32, read: u32, write: u32, execute: u32) -> String {
+    match (mode & read, mode & write, mode & execute) {
+        (0, 0, 0) => "---",
+        (_, 0, 0) => "r--",
+        (0, _, 0) => "-w-",
+        (0, 0, _) => "--x",
+        (_, 0, _) => "r-x",
+        (_, _, 0) => "rw-",
+        (0, _, _) => "-wx",
+        (_, _, _) => "rwx",
+    }.to_string()
 }
 
 fn get_entries(dir_path: Option<&Path>, flags: &Flags) -> io::Result<Vec<Entry>> {
