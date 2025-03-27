@@ -2,15 +2,15 @@ use colored::{Color, Colorize};
 use mime_guess::from_path;
 use mime_guess::mime::{APPLICATION, IMAGE, TEXT, VIDEO};
 
-use chrono::{TimeZone, Local};
+use chrono::{Local, TimeZone};
+use libc::{S_IRGRP, S_IROTH, S_IRUSR, S_IWGRP, S_IWOTH, S_IWUSR, S_IXGRP, S_IXOTH, S_IXUSR};
 use std::ffi::OsString;
 use std::fs::{self, metadata, Metadata};
 use std::io::{self, Write};
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::Path;
-use std::time::{SystemTime};
-use std::os::unix::fs::{MetadataExt,PermissionsExt};
-use libc::{S_IRGRP, S_IROTH, S_IRUSR, S_IWGRP, S_IWOTH, S_IWUSR, S_IXGRP, S_IXOTH, S_IXUSR};
-use users::{get_user_by_uid, get_group_by_gid};
+use std::time::SystemTime;
+use users::{get_group_by_gid, get_user_by_uid};
 
 use crate::cli::Flags;
 
@@ -45,10 +45,15 @@ impl FileType {
 pub struct Entry {
     name: OsString,
     r#type: FileType,
-    metadata: Option<Metadata>,
+    metadata: Metadata,
 }
 
 impl Entry {
+    /// Gets permissions of entry
+    pub fn get_permissions(&self) -> String {
+        parse_permissions(self.metadata.permissions().mode())
+    }
+
     /// Prints the file or directory into writer depending on the flags
     pub fn print_to(&self, writer: &mut impl Write, flags: &Flags) -> io::Result<()> {
         // stream_output flag returns the files and directories as a comma separated list
@@ -58,46 +63,34 @@ impl Entry {
         }
 
         if flags.long_listing {
-            if let Some(metadata) = &self.metadata {
-                write!(
-                    writer,
-                    "{}",
-                    format!("{} ", parse_permissions(metadata.permissions().mode()))
-                )?;
-                write!(
-                    writer,
-                    "{}",
-                    format!("{} ", metadata.nlink())
-                )?;
-                write!(
-                    writer,
-                    "{}",
-                    match get_file_owner_and_group(metadata){
-                        Ok(owner_string) => format!("{} {} ",owner_string.0,owner_string.1),
-                        Err(e) => format!("Error: {e:?}")
-                    }
-                )?;
-                write!(
-                    writer,
-                    "{}",
-                    if flags.human {
-                        format!("{} ", bytes_to_human(metadata.len()))
-                    } else {
-                        format!("{} ", metadata.len())
-                    }
-                )?;
-                write!(
-                    writer,
-                    "{}",
-                    match metadata.modified() {
-                        Ok(modified_time) => format!("{}\t", 
-                            get_file_date(modified_time)),
-                        Err(e) => format!("Error: {e:?}")
-                    }
-                )?;
-            }
+            write!(writer, "{} ", self.get_permissions())?;
+            write!(writer, "{}", format!("{} ", self.metadata.nlink()))?;
+            write!(
+                writer,
+                "{}",
+                match get_file_owner_and_group(&self.metadata) {
+                    Ok(owner_string) => format!("{} {} ", owner_string.0, owner_string.1),
+                    Err(e) => format!("Error: {e:?}"),
+                }
+            )?;
+            write!(
+                writer,
+                "{}",
+                if flags.human {
+                    format!("{} ", bytes_to_human(self.metadata.len()))
+                } else {
+                    format!("{} ", self.metadata.len())
+                }
+            )?;
+            write!(
+                writer,
+                "{}",
+                match self.metadata.modified() {
+                    Ok(modified_time) => format!("{}\t", get_file_date(modified_time)),
+                    Err(e) => format!("Error: {e:?}"),
+                }
+            )?;
         }
-
 
         if self.r#type.is_dir() {
             if flags.show_size {
@@ -117,18 +110,16 @@ impl Entry {
         };
 
         if flags.show_size {
-            if let Some(metadata) = &self.metadata {
-                write!(
-                    writer,
-                    "{}",
-                    if flags.human {
-                        format!("{}\t", bytes_to_human(metadata.len()))
-                    } else {
-                        format!("{}\t", metadata.len())
-                    }
-                    .color(color)
-                )?;
-            }
+            write!(
+                writer,
+                "{}",
+                if flags.human {
+                    format!("{}\t", bytes_to_human(self.metadata.len()))
+                } else {
+                    format!("{}\t", self.metadata.len())
+                }
+                .color(color)
+            )?;
         }
 
         write!(writer, "{}", self.name.to_string_lossy().color(color))?;
@@ -162,14 +153,14 @@ fn bytes_to_human(bytes: u64) -> String {
 
 /// Converts SystemTime of file metadata to readable string EX: Sep 10 14:23
 fn get_file_date(modified_time: SystemTime) -> String {
-    match modified_time.duration_since(SystemTime::UNIX_EPOCH) { 
+    match modified_time.duration_since(SystemTime::UNIX_EPOCH) {
         Ok(time_since_epoch) => {
             let secs = time_since_epoch.as_secs() as i64;
             let nsecs = time_since_epoch.subsec_nanos();
-            let timestamp = Local.timestamp_opt(secs,nsecs).unwrap();
+            let timestamp = Local.timestamp_opt(secs, nsecs).unwrap();
             timestamp.format("%b %d %H:%M").to_string()
         }
-        Err(e) => format!("Error: {e:?}")
+        Err(e) => format!("Error: {e:?}"),
     }
 }
 
@@ -210,7 +201,8 @@ fn triplet(mode: u32, read: u32, write: u32, execute: u32) -> String {
         (_, _, 0) => "rw-",
         (0, _, _) => "-wx",
         (_, _, _) => "rwx",
-    }.to_string()
+    }
+    .to_string()
 }
 
 pub fn get_entries(dir_path: Option<&Path>, flags: &Flags) -> io::Result<Vec<Entry>> {
@@ -226,7 +218,12 @@ pub fn get_entries(dir_path: Option<&Path>, flags: &Flags) -> io::Result<Vec<Ent
             return Ok(vec![Entry {
                 name: path.file_name().unwrap_or_default().to_os_string(),
                 r#type: FileType::File,
-                metadata: metadata(path).ok(),
+                metadata: if let Some(meta) = metadata(path).ok() {
+                    meta
+                } else {
+                    eprintln!("ERROR: Could not retrieve metadata!");
+                    std::process::exit(1)
+                },
             }]);
         }
     }
@@ -242,7 +239,12 @@ pub fn get_entries(dir_path: Option<&Path>, flags: &Flags) -> io::Result<Vec<Ent
             entry.file_type().ok().map(|r#type| Entry {
                 name,
                 r#type: r#type.into(),
-                metadata: entry.metadata().ok(),
+                metadata: if let Some(meta) = entry.metadata().ok() {
+                    meta
+                } else {
+                    eprintln!("ERROR: Could not retrieve metadata!");
+                    std::process::exit(1)
+                },
             })
         })
         .collect();
@@ -251,17 +253,20 @@ pub fn get_entries(dir_path: Option<&Path>, flags: &Flags) -> io::Result<Vec<Ent
     if flags.sort_by_size || flags.sort_by_modified_time {
         entries.sort_unstable_by(|a, b| {
             let key = |entry: &Entry| {
-                let metadata = entry.metadata.as_ref();
+                let metadata = &entry.metadata;
                 (
-                    metadata
-                        .map(std::fs::Metadata::len)
-                        .map(|size| u64::MAX - size)
-                        .filter(|_| flags.sort_by_size),
-                    metadata
-                        .map(std::fs::Metadata::modified)
-                        .and_then(Result::ok)
-                        .and_then(|time| time.elapsed().ok())
-                        .filter(|_| flags.sort_by_modified_time),
+                    if flags.sort_by_size {
+                        Some(u64::MAX - metadata.len())
+                    } else {
+                        None
+                    },
+                    if flags.sort_by_modified_time {
+                        metadata.modified()
+                            .ok()
+                            .and_then(|time| time.elapsed().ok())
+                    } else {
+                        None
+                    }
                 )
             };
             let mut ordering = Ord::cmp(&key(a), &key(b));
