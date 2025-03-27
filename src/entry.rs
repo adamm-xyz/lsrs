@@ -88,7 +88,7 @@ impl Entry {
                 writer,
                 "{}",
                 match self.metadata.modified() {
-                    Ok(modified_time) => format!("{}\t", get_file_date(modified_time)),
+                    Ok(modified_time) => format!("{} ", get_file_date(modified_time)),
                     Err(e) => format!("Error: {e:?}"),
                 }
             )?;
@@ -97,7 +97,7 @@ impl Entry {
         if self.r#type.is_dir() {
             if flags.show_size {
                 // Skip sizes on directories
-                write!(writer, "\t")?;
+                write!(writer, "")?;
             }
             return write!(writer, "{}/", self.name.to_string_lossy().bold().red());
         }
@@ -111,7 +111,7 @@ impl Entry {
             _ => Color::Magenta,
         };
 
-        if flags.show_size {
+        if flags.show_size && !flags.long_listing {
             write!(
                 writer,
                 "{}",
