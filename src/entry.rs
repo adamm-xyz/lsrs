@@ -53,6 +53,15 @@ impl Entry {
     pub fn get_permissions(&self) -> String {
         parse_permissions(self.metadata.permissions().mode())
     }
+    /// Gets num of links
+    pub fn get_links(&self) -> String {
+        format!("{}", self.metadata.nlink())
+    }
+
+    /// Get owner and group of entry
+    pub fn get_owners(&self) -> String {
+        get_file_owner_and_group(&self.metadata)
+    }
 
     /// Prints the file or directory into writer depending on the flags
     pub fn print_to(&self, writer: &mut impl Write, flags: &Flags) -> io::Result<()> {
@@ -64,15 +73,8 @@ impl Entry {
 
         if flags.long_listing {
             write!(writer, "{} ", self.get_permissions())?;
-            write!(writer, "{}", format!("{} ", self.metadata.nlink()))?;
-            write!(
-                writer,
-                "{}",
-                match get_file_owner_and_group(&self.metadata) {
-                    Ok(owner_string) => format!("{} {} ", owner_string.0, owner_string.1),
-                    Err(e) => format!("Error: {e:?}"),
-                }
-            )?;
+            write!(writer, "{} ", self.get_links())?;
+            write!(writer, "{} ", self.get_owners())?;
             write!(
                 writer,
                 "{}",
@@ -165,7 +167,7 @@ fn get_file_date(modified_time: SystemTime) -> String {
 }
 
 /// Gets the owner and group names associated with a file
-pub fn get_file_owner_and_group(meta: &Metadata) -> io::Result<(String, String)> {
+pub fn get_file_owner_and_group(meta: &Metadata) -> String {
     // Get owner and group IDs
     let uid = meta.uid();
     let gid = meta.gid();
@@ -179,7 +181,7 @@ pub fn get_file_owner_and_group(meta: &Metadata) -> io::Result<(String, String)>
         .map(|group| group.name().to_string_lossy().into_owned())
         .unwrap_or_else(|| gid.to_string());
 
-    Ok((owner_name, group_name))
+    format!("{} {}", owner_name, group_name)
 }
 
 /// Helper functions to get and parse permissions of entries
