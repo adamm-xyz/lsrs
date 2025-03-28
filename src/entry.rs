@@ -49,6 +49,60 @@ pub struct Entry {
 }
 
 impl Entry {
+
+    /// Prints the file or directory into writer depending on the flags
+    pub fn print_to(&self, writer: &mut impl Write, flags: &Flags) -> io::Result<()> {
+        // stream_output flag returns the files and directories as a comma separated list
+        if flags.stream_output {
+            write!(writer, "{}", self.name.to_string_lossy())?;
+            return Ok(());
+        }
+
+        if flags.long_listing {
+            write!(writer, "{} ", self.get_permissions())?;
+            write!(writer, "{} ", self.get_links())?;
+            write!(writer, "{} ", self.get_owners())?;
+            write!(writer, "{}",
+                if flags.human {
+                    format!("{} ", bytes_to_human(self.metadata.len()))
+                } else {
+                    format!("{} ", self.metadata.len())
+                })?;
+            write!(writer,"{} ", self.get_modified_time())?;
+        }
+
+        if self.r#type.is_dir() {
+            if flags.show_size {
+                // Skip sizes on directories
+                write!(writer, "")?;
+            }
+            return write!(writer, "{}/", self.name.to_string_lossy().bold().red());
+        }
+
+
+        if flags.show_size && !flags.long_listing {
+            write!(writer,"{}",
+                if flags.human {
+                    format!("{}\t", bytes_to_human(self.metadata.len()))
+                } else {
+                    format!("{}\t", self.metadata.len())
+                })?;
+        }
+
+        // Entries are color coded based on file type
+        let color = match from_path(&self.name).first_or_octet_stream().type_() {
+            IMAGE => Color::Blue,
+            TEXT => Color::Yellow,
+            APPLICATION => Color::Green,
+            VIDEO => Color::Cyan,
+            _ => Color::Magenta,
+        };
+
+        write!(writer, "{}", self.name.to_string_lossy().color(color))?;
+
+        Ok(())
+    }
+
     /// Gets permissions of entry
     pub fn get_permissions(&self) -> String {
         parse_permissions(self.metadata.permissions().mode())
@@ -63,70 +117,12 @@ impl Entry {
         get_file_owner_and_group(&self.metadata)
     }
 
-    /// Prints the file or directory into writer depending on the flags
-    pub fn print_to(&self, writer: &mut impl Write, flags: &Flags) -> io::Result<()> {
-        // stream_output flag returns the files and directories as a comma separated list
-        if flags.stream_output {
-            write!(writer, "{}", self.name.to_string_lossy())?;
-            return Ok(());
+    /// Get modified (local) time of entry
+    pub fn get_modified_time(&self) -> String {
+        match self.metadata.modified() {
+            Ok(mod_time) => get_file_date(mod_time),
+            Err(e) => format!("Error: {}",e)
         }
-
-        if flags.long_listing {
-            write!(writer, "{} ", self.get_permissions())?;
-            write!(writer, "{} ", self.get_links())?;
-            write!(writer, "{} ", self.get_owners())?;
-            write!(
-                writer,
-                "{}",
-                if flags.human {
-                    format!("{} ", bytes_to_human(self.metadata.len()))
-                } else {
-                    format!("{} ", self.metadata.len())
-                }
-            )?;
-            write!(
-                writer,
-                "{}",
-                match self.metadata.modified() {
-                    Ok(modified_time) => format!("{} ", get_file_date(modified_time)),
-                    Err(e) => format!("Error: {e:?}"),
-                }
-            )?;
-        }
-
-        if self.r#type.is_dir() {
-            if flags.show_size {
-                // Skip sizes on directories
-                write!(writer, "")?;
-            }
-            return write!(writer, "{}/", self.name.to_string_lossy().bold().red());
-        }
-
-        // Entries are color coded based on file type
-        let color = match from_path(&self.name).first_or_octet_stream().type_() {
-            IMAGE => Color::Blue,
-            TEXT => Color::Yellow,
-            APPLICATION => Color::Green,
-            VIDEO => Color::Cyan,
-            _ => Color::Magenta,
-        };
-
-        if flags.show_size && !flags.long_listing {
-            write!(
-                writer,
-                "{}",
-                if flags.human {
-                    format!("{}\t", bytes_to_human(self.metadata.len()))
-                } else {
-                    format!("{}\t", self.metadata.len())
-                }
-                .color(color)
-            )?;
-        }
-
-        write!(writer, "{}", self.name.to_string_lossy().color(color))?;
-
-        Ok(())
     }
 }
 

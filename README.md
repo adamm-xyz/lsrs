@@ -61,6 +61,6 @@ cargo build
 - [x] Add sort by file size, largest first (-S)
 - [x] Add sort by time, newest first (-t)
 - [x] Add fill width with a comma separated list of entries (-m)
-- [ ] Add long listing format (-l)
+- [x] Add long listing format (-l)
 - [ ] Add sort alphabetically by entry extension (-X)
 - [ ] Add natural sort of (version) numbers within text (-v)
