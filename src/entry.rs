@@ -128,9 +128,10 @@ impl Entry {
 
 /// Converts bytes into human readable format like 2.5KB
 fn bytes_to_human(bytes: u64) -> String {
+    let max_str_len = 5;
     const UNITS: [&str; 5] = ["B", "K", "M", "G", "T"];
     if bytes == 0 {
-        return String::from("0B");
+        return String::from("   0B");
     }
     let index = (bytes.ilog(1024) as usize).min(UNITS.len() - 1);
     #[allow(
@@ -143,10 +144,16 @@ fn bytes_to_human(bytes: u64) -> String {
         reason = "files probably won't be that big, and precision won't matter by that point"
     )]
     let value = bytes as f64 / 1024_f64.powi(index as i32);
-    if index == 0 {
-        return format!("{}{}", value, UNITS[index]);
+    let mut byte_string = format!("{}{}", value, UNITS[index]);
+    if index != 0 {
+        byte_string = format!("{:.1}{}", value, UNITS[index]);
     }
-    format!("{:.1}{}", value, UNITS[index])
+    let pad_amt = max_str_len - byte_string.len();
+
+    if pad_amt > 0 {
+        byte_string = format!("{}{}"," ".repeat(pad_amt), byte_string)
+    }
+    byte_string
 }
 
 /// Converts SystemTime of file metadata to readable string EX: Sep 10 14:23
