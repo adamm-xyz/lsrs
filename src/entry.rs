@@ -126,12 +126,21 @@ impl Entry {
     }
 }
 
+fn pad_str(src: String) -> String {
+    let max_str_len = 6;
+    let pad_amt = max_str_len - src.len();
+
+    if pad_amt > 0 {
+        return format!("{}{}"," ".repeat(pad_amt), src)
+    }
+    src
+}
+
 /// Converts bytes into human readable format like 2.5KB
 fn bytes_to_human(bytes: u64) -> String {
-    let max_str_len = 5;
     const UNITS: [&str; 5] = ["B", "K", "M", "G", "T"];
     if bytes == 0 {
-        return String::from("   0B");
+        return pad_str(String::from("0B"));
     }
     let index = (bytes.ilog(1024) as usize).min(UNITS.len() - 1);
     #[allow(
@@ -148,12 +157,8 @@ fn bytes_to_human(bytes: u64) -> String {
     if index != 0 {
         byte_string = format!("{:.1}{}", value, UNITS[index]);
     }
-    let pad_amt = max_str_len - byte_string.len();
-
-    if pad_amt > 0 {
-        byte_string = format!("{}{}"," ".repeat(pad_amt), byte_string)
-    }
-    byte_string
+    //println!("{:?}",byte_string);
+    pad_str(byte_string)
 }
 
 /// Converts SystemTime of file metadata to readable string EX: Sep 10 14:23
