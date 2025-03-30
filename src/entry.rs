@@ -240,24 +240,43 @@ pub fn get_entries(dir_path: Option<&Path>, flags: &Flags) -> io::Result<Vec<Ent
 
     // Collect entries into vector, ignoring hidden entries if show_hidden is false
     let mut entries: Vec<_> = fs::read_dir(path.unwrap_or_else(|| Path::new(".")))?
-        .flatten()
-        .filter_map(|entry| {
-            let name = entry.file_name();
-            if !flags.show_hidden && is_hidden_folder(&entry.path()) {
+    .filter_map(|entry_result| {
+        let entry = match entry_result {
+            Ok(entry) => entry,
+            Err(e) => {
+                eprintln!("Warning: Could not access entry: {}", e);
                 return None;
             }
-            entry.file_type().ok().map(|r#type| Entry {
-                name,
-                r#type: r#type.into(),
-                metadata: if let Some(meta) = entry.metadata().ok() {
-                    meta
-                } else {
-                    eprintln!("ERROR: Could not retrieve metadata!");
-                    std::process::exit(1)
-                },
-            })
+        };
+
+        let name = entry.file_name();
+        if !flags.show_hidden && is_hidden_folder(&entry.path()) {
+            return None;
+        }
+
+        let file_type = match entry.file_type() {
+            Ok(ft) => ft.into(),
+            Err(e) => {
+                eprintln!("Warning: Could not get file type: {}", e);
+                return None;
+            }
+        };
+
+        let metadata = match entry.metadata() {
+            Ok(meta) => meta,
+            Err(e) => {
+                eprintln!("Warning: Could not retrieve metadata: {}", e);
+                return None;
+            }
+        };
+
+        Some(Entry {
+            name,
+            r#type: file_type,
+            metadata,
         })
-        .collect();
+    })
+    .collect();
 
     // Sort the entries by relevant flag (by size or by time modified)
     if flags.sort_by_size || flags.sort_by_modified_time {
