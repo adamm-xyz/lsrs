@@ -49,7 +49,6 @@ pub struct Entry {
 }
 
 impl Entry {
-
     /// Prints the file or directory into writer depending on the flags
     pub fn print_to(&self, writer: &mut impl Write, flags: &Flags) -> io::Result<()> {
         // stream_output flag returns the files and directories as a comma separated list
@@ -62,13 +61,16 @@ impl Entry {
             write!(writer, "{} ", self.get_permissions())?;
             write!(writer, "{} ", self.get_links())?;
             write!(writer, "{} ", self.get_owners())?;
-            write!(writer, "{}",
+            write!(
+                writer,
+                "{}",
                 if flags.human {
                     format!("{} ", bytes_to_human(self.metadata.len()))
                 } else {
                     format!("{} ", self.metadata.len())
-                })?;
-            write!(writer,"{} ", self.get_modified_time())?;
+                }
+            )?;
+            write!(writer, "{} ", self.get_modified_time())?;
         }
 
         if self.r#type.is_dir() {
@@ -79,14 +81,16 @@ impl Entry {
             return write!(writer, "{}/", self.name.to_string_lossy().bold().red());
         }
 
-
         if flags.show_size && !flags.long_listing {
-            write!(writer,"{}",
+            write!(
+                writer,
+                "{}",
                 if flags.human {
                     format!("{}\t", bytes_to_human(self.metadata.len()))
                 } else {
                     format!("{}\t", self.metadata.len())
-                })?;
+                }
+            )?;
         }
 
         // Entries are color coded based on file type
@@ -121,7 +125,7 @@ impl Entry {
     pub fn get_modified_time(&self) -> String {
         match self.metadata.modified() {
             Ok(mod_time) => get_file_date(mod_time),
-            Err(e) => format!("Error: {}",e)
+            Err(e) => format!("Error: {}", e),
         }
     }
 }
@@ -131,7 +135,7 @@ fn pad_str(src: String) -> String {
     let pad_amt = max_str_len - src.len();
 
     if pad_amt > 0 {
-        return format!("{}{}"," ".repeat(pad_amt), src)
+        return format!("{}{}", " ".repeat(pad_amt), src);
     }
     src
 }
@@ -228,7 +232,7 @@ pub fn get_entries(dir_path: Option<&Path>, flags: &Flags) -> io::Result<Vec<Ent
             return Ok(vec![Entry {
                 name: path.file_name().unwrap_or_default().to_os_string(),
                 r#type: FileType::File,
-                metadata: if let Some(meta) = metadata(path).ok() {
+                metadata: if let Ok(meta) = metadata(path) {
                     meta
                 } else {
                     eprintln!("ERROR: Could not retrieve metadata!");
@@ -240,43 +244,43 @@ pub fn get_entries(dir_path: Option<&Path>, flags: &Flags) -> io::Result<Vec<Ent
 
     // Collect entries into vector, ignoring hidden entries if show_hidden is false
     let mut entries: Vec<_> = fs::read_dir(path.unwrap_or_else(|| Path::new(".")))?
-    .filter_map(|entry_result| {
-        let entry = match entry_result {
-            Ok(entry) => entry,
-            Err(e) => {
-                eprintln!("Warning: Could not access entry: {}", e);
+        .filter_map(|entry_result| {
+            let entry = match entry_result {
+                Ok(entry) => entry,
+                Err(e) => {
+                    eprintln!("Warning: Could not access entry: {}", e);
+                    return None;
+                }
+            };
+
+            let name = entry.file_name();
+            if !flags.show_hidden && is_hidden_folder(&entry.path()) {
                 return None;
             }
-        };
 
-        let name = entry.file_name();
-        if !flags.show_hidden && is_hidden_folder(&entry.path()) {
-            return None;
-        }
+            let file_type = match entry.file_type() {
+                Ok(ft) => ft.into(),
+                Err(e) => {
+                    eprintln!("Warning: Could not get file type: {}", e);
+                    return None;
+                }
+            };
 
-        let file_type = match entry.file_type() {
-            Ok(ft) => ft.into(),
-            Err(e) => {
-                eprintln!("Warning: Could not get file type: {}", e);
-                return None;
-            }
-        };
+            let metadata = match entry.metadata() {
+                Ok(meta) => meta,
+                Err(e) => {
+                    eprintln!("Warning: Could not retrieve metadata: {}", e);
+                    return None;
+                }
+            };
 
-        let metadata = match entry.metadata() {
-            Ok(meta) => meta,
-            Err(e) => {
-                eprintln!("Warning: Could not retrieve metadata: {}", e);
-                return None;
-            }
-        };
-
-        Some(Entry {
-            name,
-            r#type: file_type,
-            metadata,
+            Some(Entry {
+                name,
+                r#type: file_type,
+                metadata,
+            })
         })
-    })
-    .collect();
+        .collect();
 
     // Sort the entries by relevant flag (by size or by time modified)
     if flags.sort_by_size || flags.sort_by_modified_time {
@@ -290,12 +294,13 @@ pub fn get_entries(dir_path: Option<&Path>, flags: &Flags) -> io::Result<Vec<Ent
                         None
                     },
                     if flags.sort_by_modified_time {
-                        metadata.modified()
+                        metadata
+                            .modified()
                             .ok()
                             .and_then(|time| time.elapsed().ok())
                     } else {
                         None
-                    }
+                    },
                 )
             };
             let mut ordering = Ord::cmp(&key(a), &key(b));
