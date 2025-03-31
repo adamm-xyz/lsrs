@@ -48,10 +48,49 @@ pub struct Entry {
     metadata: Metadata,
 }
 
+pub fn print_entries(flags: Flags) -> io::Result<()> {
+    match get_entries(flags.path.as_deref(), &flags) {
+        Ok(entries) => {
+            let max_file_len = entries.iter()
+                .map(|entry| bytes_to_human(entry.metadata.len()).chars().count())
+                .max()
+                .unwrap_or(6);
+            let max_sym_len = entries.iter()
+                .map(|entry| entry.get_links().chars().count())
+                .max()
+                .unwrap_or(2);
+
+            let mut stdout = io::stdout();
+            if let Err(error) = entries.iter().enumerate().try_for_each(|(index, entry)| {
+                // Comma separate
+                if index != 0 && flags.stream_output {
+                    write!(stdout, ", ")?;
+                }
+                // Print entries
+                let result = entry.print_to(&mut stdout, &flags, max_file_len, max_sym_len as usize);
+                if flags.stream_output {
+                    stdout.flush()?;
+                } else {
+                    println!();
+                }
+                result
+            }) {
+                eprintln!("Error printing entries: {error}");
+                return Err(error);
+            }
+            Ok(())
+        }
+        Err(error) => {
+            eprintln!("Error listing entries: {error}");
+            Err(error)
+        }
+    }
+}
+
 impl Entry {
 
     /// Prints the file or directory into writer depending on the flags
-    pub fn print_to(&self, writer: &mut impl Write, flags: &Flags) -> io::Result<()> {
+    pub fn print_to(&self, writer: &mut impl Write, flags: &Flags, max_file_len: usize, max_sym_len: usize) -> io::Result<()> {
         // stream_output flag returns the files and directories as a comma separated list
         if flags.stream_output {
             write!(writer, "{}", self.name.to_string_lossy())?;
@@ -60,11 +99,11 @@ impl Entry {
 
         if flags.long_listing {
             write!(writer, "{} ", self.get_permissions())?;
-            write!(writer, "{} ", self.get_links())?;
+            write!(writer, "{} ", pad_str(self.get_links(),max_sym_len))?;
             write!(writer, "{} ", self.get_owners())?;
-            write!(writer, "{}",
+            write!(writer, "{} ",
                 if flags.human {
-                    format!("{} ", bytes_to_human(self.metadata.len()))
+                    format!("{}", pad_str(bytes_to_human(self.metadata.len()), max_file_len))
                 } else {
                     format!("{} ", self.metadata.len())
                 })?;
@@ -126,21 +165,15 @@ impl Entry {
     }
 }
 
-fn pad_str(src: String) -> String {
-    let max_str_len = 6;
-    let pad_amt = max_str_len - src.len();
-
-    if pad_amt > 0 {
-        return format!("{}{}"," ".repeat(pad_amt), src)
-    }
-    src
+fn pad_str(src: String, width: usize) -> String {
+    format!("{:width$}", src, width = width)
 }
 
 /// Converts bytes into human readable format like 2.5KB
 fn bytes_to_human(bytes: u64) -> String {
     const UNITS: [&str; 5] = ["B", "K", "M", "G", "T"];
     if bytes == 0 {
-        return pad_str(String::from("0B"));
+        return String::from("0B");
     }
     let index = (bytes.ilog(1024) as usize).min(UNITS.len() - 1);
     #[allow(
@@ -153,12 +186,11 @@ fn bytes_to_human(bytes: u64) -> String {
         reason = "files probably won't be that big, and precision won't matter by that point"
     )]
     let value = bytes as f64 / 1024_f64.powi(index as i32);
-    let mut byte_string = format!("{}{}", value, UNITS[index]);
-    if index != 0 {
-        byte_string = format!("{:.1}{}", value, UNITS[index]);
+    if index == 0 {
+        format!("{}{}", value, UNITS[index])
+    } else {
+        format!("{:.1}{}", value, UNITS[index])
     }
-    //println!("{:?}",byte_string);
-    pad_str(byte_string)
 }
 
 /// Converts SystemTime of file metadata to readable string EX: Sep 10 14:23
@@ -240,43 +272,44 @@ pub fn get_entries(dir_path: Option<&Path>, flags: &Flags) -> io::Result<Vec<Ent
 
     // Collect entries into vector, ignoring hidden entries if show_hidden is false
     let mut entries: Vec<_> = fs::read_dir(path.unwrap_or_else(|| Path::new(".")))?
-    .filter_map(|entry_result| {
-        let entry = match entry_result {
-            Ok(entry) => entry,
-            Err(e) => {
-                eprintln!("Warning: Could not access entry: {}", e);
+        .filter_map(|entry_result| {
+            let entry = match entry_result {
+                Ok(entry) => entry,
+                Err(e) => {
+                    eprintln!("Warning: Could not access entry: {}", e);
+                    return None;
+                }
+            };
+
+            let name = entry.file_name();
+            if !flags.show_hidden && is_hidden_folder(&entry.path()) {
                 return None;
             }
-        };
 
-        let name = entry.file_name();
-        if !flags.show_hidden && is_hidden_folder(&entry.path()) {
-            return None;
-        }
+            let file_type = match entry.file_type() {
+                Ok(ft) => ft.into(),
+                Err(e) => {
+                    eprintln!("Warning: Could not get file type: {}", e);
+                    return None;
+                }
+            };
 
-        let file_type = match entry.file_type() {
-            Ok(ft) => ft.into(),
-            Err(e) => {
-                eprintln!("Warning: Could not get file type: {}", e);
-                return None;
-            }
-        };
+            let metadata = match entry.metadata() {
+                Ok(meta) => meta,
+                Err(e) => {
+                    eprintln!("Warning: Could not retrieve metadata: {}", e);
+                    return None;
+                }
+            };
 
-        let metadata = match entry.metadata() {
-            Ok(meta) => meta,
-            Err(e) => {
-                eprintln!("Warning: Could not retrieve metadata: {}", e);
-                return None;
-            }
-        };
-
-        Some(Entry {
-            name,
-            r#type: file_type,
-            metadata,
+            Some(Entry {
+                name,
+                r#type: file_type,
+                metadata,
+            })
         })
-    })
-    .collect();
+        .collect();
+
 
     // Sort the entries by relevant flag (by size or by time modified)
     if flags.sort_by_size || flags.sort_by_modified_time {
