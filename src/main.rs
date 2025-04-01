@@ -10,5 +10,4 @@ fn main() {
         Ok(()) => (),
         Err(error) => eprintln!("{error}")
     }
-
 }

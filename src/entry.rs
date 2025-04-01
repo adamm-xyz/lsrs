@@ -51,10 +51,18 @@ pub struct Entry {
 pub fn print_entries(flags: Flags) -> io::Result<()> {
     match get_entries(flags.path.as_deref(), &flags) {
         Ok(entries) => {
-            let max_file_len = entries.iter()
-                .map(|entry| bytes_to_human(entry.metadata.len()).chars().count())
-                .max()
-                .unwrap_or(6);
+            let mut max_file_len = 6;
+            if flags.human {
+                max_file_len = entries.iter()
+                    .map(|entry| bytes_to_human(entry.metadata.len()).chars().count())
+                    .max()
+                    .unwrap_or(6);
+            } else {
+                max_file_len = entries.iter()
+                    .map(|entry| entry.metadata.len().to_string().chars().count())
+                    .max()
+                    .unwrap_or(6);
+            }
             let max_sym_len = entries.iter()
                 .map(|entry| entry.get_links().chars().count())
                 .max()
@@ -105,7 +113,7 @@ impl Entry {
                 if flags.human {
                     format!("{}", pad_str(bytes_to_human(self.metadata.len()), max_file_len))
                 } else {
-                    format!("{} ", self.metadata.len())
+                    format!("{} ", pad_str(self.metadata.len().to_string(),max_file_len))
                 })?;
             write!(writer,"{} ", self.get_modified_time())?;
         }
