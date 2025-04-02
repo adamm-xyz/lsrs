@@ -1,12 +1,9 @@
-use colored::{Color, Colorize};
-use mime_guess::from_path;
-use mime_guess::mime::{APPLICATION, IMAGE, TEXT, VIDEO};
 
 use chrono::{Local, TimeZone};
 use libc::{S_IRGRP, S_IROTH, S_IRUSR, S_IWGRP, S_IWOTH, S_IWUSR, S_IXGRP, S_IXOTH, S_IXUSR};
 use std::ffi::OsString;
 use std::fs::{self, metadata, Metadata};
-use std::io::{self, Write};
+use std::io;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::Path;
 use std::time::SystemTime;
@@ -36,116 +33,19 @@ impl FileType {
     ///
     /// [`Dir`]: FileType::Dir
     #[must_use]
-    const fn is_dir(self) -> bool {
+    pub const fn is_dir(self) -> bool {
         matches!(self, Self::Dir)
     }
 }
 
 /// Represents a File or a Dir with all the metadata
 pub struct Entry {
-    name: OsString,
-    r#type: FileType,
-    metadata: Metadata,
-}
-
-pub fn print_entries(flags: Flags) -> io::Result<()> {
-    match get_entries(flags.path.as_deref(), &flags) {
-        Ok(entries) => {
-            let max_file_len = entries.iter()
-                .map(|entry| if flags.human {
-                    bytes_to_human(entry.metadata.len()).chars().count()
-                } else {
-                    entry.metadata.len().to_string().chars().count()
-                })
-                .max()
-                .unwrap_or(6);
-            let max_sym_len = entries.iter()
-                .map(|entry| entry.get_links().chars().count())
-                .max()
-                .unwrap_or(2);
-
-            let mut stdout = io::stdout();
-            if let Err(error) = entries.iter().enumerate().try_for_each(|(index, entry)| {
-                // Comma separate
-                if index != 0 && flags.stream_output {
-                    write!(stdout, ", ")?;
-                }
-                // Print entries
-                let result = entry.print_to(&mut stdout, &flags, max_file_len, max_sym_len as usize);
-                if flags.stream_output {
-                    stdout.flush()?;
-                } else {
-                    println!();
-                }
-                result
-            }) {
-                eprintln!("Error printing entries: {error}");
-                return Err(error);
-            }
-            Ok(())
-        }
-        Err(error) => {
-            eprintln!("Error listing entries: {error}");
-            Err(error)
-        }
-    }
+    pub name: OsString,
+    pub r#type: FileType,
+    pub metadata: Metadata,
 }
 
 impl Entry {
-
-    /// Prints the file or directory into writer depending on the flags
-    pub fn print_to(&self, writer: &mut impl Write, flags: &Flags, max_file_len: usize, max_sym_len: usize) -> io::Result<()> {
-        // stream_output flag returns the files and directories as a comma separated list
-        if flags.stream_output {
-            write!(writer, "{}", self.name.to_string_lossy())?;
-            return Ok(());
-        }
-
-        if flags.long_listing {
-            write!(writer, "{} ", self.get_permissions())?;
-            write!(writer, "{} ", pad_str(self.get_links(),max_sym_len))?;
-            write!(writer, "{} ", self.get_owners())?;
-            write!(writer, "{} ",
-                if flags.human {
-                    format!("{}", pad_str(bytes_to_human(self.metadata.len()), max_file_len))
-                } else {
-                    format!("{} ", pad_str(self.metadata.len().to_string(),max_file_len))
-                })?;
-            write!(writer,"{} ", self.get_modified_time())?;
-        }
-
-        if self.r#type.is_dir() {
-            if flags.show_size {
-                // Skip sizes on directories
-                write!(writer, "")?;
-            }
-            return write!(writer, "{}/", self.name.to_string_lossy().bold().red());
-        }
-
-
-        if flags.show_size && !flags.long_listing {
-            write!(writer,"{}",
-                if flags.human {
-                    format!("{}\t", bytes_to_human(self.metadata.len()))
-                } else {
-                    format!("{}\t", self.metadata.len())
-                })?;
-        }
-
-        // Entries are color coded based on file type
-        let color = match from_path(&self.name).first_or_octet_stream().type_() {
-            IMAGE => Color::Blue,
-            TEXT => Color::Yellow,
-            APPLICATION => Color::Green,
-            VIDEO => Color::Cyan,
-            _ => Color::Magenta,
-        };
-
-        write!(writer, "{}", self.name.to_string_lossy().color(color))?;
-
-        Ok(())
-    }
-
     /// Gets permissions of entry
     pub fn get_permissions(&self) -> String {
         parse_permissions(self.metadata.permissions().mode())
@@ -167,88 +67,6 @@ impl Entry {
             Err(e) => format!("Error: {}",e)
         }
     }
-}
-
-fn pad_str(src: String, width: usize) -> String {
-    format!("{:width$}", src, width = width)
-}
-
-/// Converts bytes into human readable format like 2.5KB
-fn bytes_to_human(bytes: u64) -> String {
-    const UNITS: [&str; 5] = ["B", "K", "M", "G", "T"];
-    if bytes == 0 {
-        return String::from("0B");
-    }
-    let index = (bytes.ilog(1024) as usize).min(UNITS.len() - 1);
-    #[allow(
-        clippy::cast_possible_truncation,
-        clippy::cast_possible_wrap,
-        reason = "index is never more than `UNITS.len() - 1`"
-    )]
-    #[allow(
-        clippy::cast_precision_loss,
-        reason = "files probably won't be that big, and precision won't matter by that point"
-    )]
-    let value = bytes as f64 / 1024_f64.powi(index as i32);
-    if index == 0 {
-        format!("{}{}", value, UNITS[index])
-    } else {
-        format!("{:.1}{}", value, UNITS[index])
-    }
-}
-
-/// Converts SystemTime of file metadata to readable string EX: Sep 10 14:23
-fn get_file_date(modified_time: SystemTime) -> String {
-    match modified_time.duration_since(SystemTime::UNIX_EPOCH) {
-        Ok(time_since_epoch) => {
-            let secs = time_since_epoch.as_secs() as i64;
-            let nsecs = time_since_epoch.subsec_nanos();
-            let timestamp = Local.timestamp_opt(secs, nsecs).unwrap();
-            timestamp.format("%b %d %H:%M").to_string()
-        }
-        Err(e) => format!("Error: {e:?}"),
-    }
-}
-
-/// Gets the owner and group names associated with a file
-pub fn get_file_owner_and_group(meta: &Metadata) -> String {
-    // Get owner and group IDs
-    let uid = meta.uid();
-    let gid = meta.gid();
-
-    // Look up the user and group names
-    let owner_name = get_user_by_uid(uid)
-        .map(|user| user.name().to_string_lossy().into_owned())
-        .unwrap_or_else(|| uid.to_string());
-
-    let group_name = get_group_by_gid(gid)
-        .map(|group| group.name().to_string_lossy().into_owned())
-        .unwrap_or_else(|| gid.to_string());
-
-    format!("{} {}", owner_name, group_name)
-}
-
-/// Helper functions to get and parse permissions of entries
-/// Credit to Matthias Endler at endler.dev
-fn parse_permissions(mode: u32) -> String {
-    let user = triplet(mode, S_IRUSR, S_IWUSR, S_IXUSR);
-    let group = triplet(mode, S_IRGRP, S_IWGRP, S_IXGRP);
-    let other = triplet(mode, S_IROTH, S_IWOTH, S_IXOTH);
-    [user, group, other].join("")
-}
-
-fn triplet(mode: u32, read: u32, write: u32, execute: u32) -> String {
-    match (mode & read, mode & write, mode & execute) {
-        (0, 0, 0) => "---",
-        (_, 0, 0) => "r--",
-        (0, _, 0) => "-w-",
-        (0, 0, _) => "--x",
-        (_, 0, _) => "r-x",
-        (_, _, 0) => "rw-",
-        (0, _, _) => "-wx",
-        (_, _, _) => "rwx",
-    }
-    .to_string()
 }
 
 pub fn get_entries(dir_path: Option<&Path>, flags: &Flags) -> io::Result<Vec<Entry>> {
@@ -351,3 +169,59 @@ fn is_hidden_folder(path: &Path) -> bool {
     path.file_name()
         .is_some_and(|name| name.as_encoded_bytes()[0] == b'.')
 }
+
+/// Helper functions to get and parse permissions of entries
+/// Credit to Matthias Endler at endler.dev
+fn parse_permissions(mode: u32) -> String {
+    let user = triplet(mode, S_IRUSR, S_IWUSR, S_IXUSR);
+    let group = triplet(mode, S_IRGRP, S_IWGRP, S_IXGRP);
+    let other = triplet(mode, S_IROTH, S_IWOTH, S_IXOTH);
+    [user, group, other].join("")
+}
+
+fn triplet(mode: u32, read: u32, write: u32, execute: u32) -> String {
+    match (mode & read, mode & write, mode & execute) {
+        (0, 0, 0) => "---",
+        (_, 0, 0) => "r--",
+        (0, _, 0) => "-w-",
+        (0, 0, _) => "--x",
+        (_, 0, _) => "r-x",
+        (_, _, 0) => "rw-",
+        (0, _, _) => "-wx",
+        (_, _, _) => "rwx",
+    }
+    .to_string()
+}
+
+
+/// Gets the owner and group names associated with a file
+pub fn get_file_owner_and_group(meta: &Metadata) -> String {
+    // Get owner and group IDs
+    let uid = meta.uid();
+    let gid = meta.gid();
+
+    // Look up the user and group names
+    let owner_name = get_user_by_uid(uid)
+        .map(|user| user.name().to_string_lossy().into_owned())
+        .unwrap_or_else(|| uid.to_string());
+
+    let group_name = get_group_by_gid(gid)
+        .map(|group| group.name().to_string_lossy().into_owned())
+        .unwrap_or_else(|| gid.to_string());
+
+    format!("{} {}", owner_name, group_name)
+}
+
+/// Converts SystemTime of file metadata to readable string EX: Sep 10 14:23
+fn get_file_date(modified_time: SystemTime) -> String {
+    match modified_time.duration_since(SystemTime::UNIX_EPOCH) {
+        Ok(time_since_epoch) => {
+            let secs = time_since_epoch.as_secs() as i64;
+            let nsecs = time_since_epoch.subsec_nanos();
+            let timestamp = Local.timestamp_opt(secs, nsecs).unwrap();
+            timestamp.format("%b %d %H:%M").to_string()
+        }
+        Err(e) => format!("Error: {e:?}"),
+    }
+}
+
