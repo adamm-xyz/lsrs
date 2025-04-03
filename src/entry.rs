@@ -46,6 +46,16 @@ pub struct Entry {
 }
 
 impl Entry {
+    /// Gets name of entry
+    pub fn get_name(&self) -> String {
+        self.name.to_string_lossy().to_string()
+    }
+
+    /// Gets size (in bytes) of entry
+    pub fn get_size(&self) -> u64 {
+        self.metadata.len()
+    }
+
     /// Gets permissions of entry
     pub fn get_permissions(&self) -> String {
         parse_permissions(self.metadata.permissions().mode())

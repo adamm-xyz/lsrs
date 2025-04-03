@@ -56,9 +56,9 @@ impl Entry {
             write!(writer, "{} ", self.get_owners())?;
             write!(writer, "{} ",
                 if flags.human {
-                    format!("{}", pad_str(bytes_to_human(self.metadata.len()), max_file_len))
+                    format!("{}", pad_str(bytes_to_human(self.get_size()), max_file_len))
                 } else {
-                    format!("{} ", pad_str(self.metadata.len().to_string(),max_file_len))
+                    format!("{} ", pad_str(self.get_size().to_string(),max_file_len))
                 })?;
             write!(writer,"{} ", self.get_modified_time())?;
         }
@@ -68,16 +68,16 @@ impl Entry {
                 // Skip sizes on directories
                 write!(writer, "")?;
             }
-            return write!(writer, "{}/", self.name.to_string_lossy().bold().red());
+            return write!(writer, "{}/", self.get_name().bold().red());
         }
 
 
         if flags.show_size && !flags.long_listing {
             write!(writer,"{}",
                 if flags.human {
-                    format!("{}\t", bytes_to_human(self.metadata.len()))
+                    format!("{}\t", bytes_to_human(self.get_size()))
                 } else {
-                    format!("{}\t", self.metadata.len())
+                    format!("{}\t", self.get_size())
                 })?;
         }
 
@@ -90,7 +90,7 @@ impl Entry {
             _ => Color::Magenta,
         };
 
-        write!(writer, "{}", self.name.to_string_lossy().color(color))?;
+        write!(writer, "{}", self.get_name().color(color))?;
 
         Ok(())
     }
