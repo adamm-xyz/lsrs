@@ -9,9 +9,9 @@ use colored::{Color, Colorize};
 pub fn print_entries(entries: Vec<Entry>, flags: Flags) -> io::Result<()> {
     let max_file_len = entries.iter()
         .map(|entry| if flags.human {
-            bytes_to_human(entry.metadata.len()).chars().count()
+            bytes_to_human(entry.get_size()).chars().count()
         } else {
-            entry.metadata.len().to_string().chars().count()
+            entry.get_size().to_string().chars().count()
         })
         .max()
         .unwrap_or(6);
@@ -46,7 +46,7 @@ impl Entry {
     pub fn print_entry(&self, writer: &mut impl Write, flags: &Flags, max_file_len: usize, max_sym_len: usize) -> io::Result<()> {
         // stream_output flag returns the files and directories as a comma separated list
         if flags.stream_output {
-            write!(writer, "{}", self.name.to_string_lossy())?;
+            write!(writer, "{}", self.get_name())?;
             return Ok(());
         }
 
@@ -63,7 +63,7 @@ impl Entry {
             write!(writer,"{} ", self.get_modified_time())?;
         }
 
-        if self.r#type.is_dir() {
+        if self.is_folder() {
             if flags.show_size {
                 // Skip sizes on directories
                 write!(writer, "")?;
@@ -82,7 +82,7 @@ impl Entry {
         }
 
         // Entries are color coded based on file type
-        let color = match from_path(&self.name).first_or_octet_stream().type_() {
+        let color = match from_path(&self.get_name()).first_or_octet_stream().type_() {
             IMAGE => Color::Blue,
             TEXT => Color::Yellow,
             APPLICATION => Color::Green,

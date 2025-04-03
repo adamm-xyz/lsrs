@@ -40,12 +40,17 @@ impl FileType {
 
 /// Represents a File or a Dir with all the metadata
 pub struct Entry {
-    pub name: OsString,
-    pub r#type: FileType,
-    pub metadata: Metadata,
+    name: OsString,
+    r#type: FileType,
+    metadata: Metadata,
 }
 
 impl Entry {
+    /// If entry is a folder or file
+    pub fn is_folder(&self) -> bool {
+        self.r#type.is_dir()
+    }
+
     /// Gets name of entry
     pub fn get_name(&self) -> String {
         self.name.to_string_lossy().to_string()
