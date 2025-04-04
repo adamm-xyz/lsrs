@@ -6,19 +6,12 @@ use mime_guess::from_path;
 use mime_guess::mime::{APPLICATION, IMAGE, TEXT, VIDEO};
 use colored::{Color, Colorize};
 
+pub struct FormatSizes {
+    pub file_len: usize,
+    pub sym_len: usize,
+}
+
 pub fn print_entries(entries: Vec<Entry>, flags: Flags) -> io::Result<()> {
-    let max_file_len = entries.iter()
-        .map(|entry| if flags.human {
-            bytes_to_human(entry.get_size()).chars().count()
-        } else {
-            entry.get_size().to_string().chars().count()
-        })
-        .max()
-        .unwrap_or(6);
-    let max_sym_len = entries.iter()
-        .map(|entry| entry.get_links().chars().count())
-        .max()
-        .unwrap_or(2);
 
     let mut stdout = io::stdout();
     if let Err(error) = entries.iter().enumerate().try_for_each(|(index, entry)| {
@@ -26,8 +19,11 @@ pub fn print_entries(entries: Vec<Entry>, flags: Flags) -> io::Result<()> {
         if index != 0 && flags.stream_output {
             write!(stdout, ", ")?;
         }
+        // Get relevant formatting string lengths
+        let sizes = calculate_format_sizes(&entries, &flags);
+
         // Print entries
-        let result = entry.print_entry( &mut stdout, &flags, max_file_len, max_sym_len as usize);
+        let result = entry.print_entry( &mut stdout, &flags, &sizes);
         if flags.stream_output {
             stdout.flush()?;
         } else {
@@ -43,7 +39,7 @@ pub fn print_entries(entries: Vec<Entry>, flags: Flags) -> io::Result<()> {
 
 impl Entry {
     /// Prints the file or directory into writer depending on the flags
-    pub fn print_entry(&self, writer: &mut impl Write, flags: &Flags, max_file_len: usize, max_sym_len: usize) -> io::Result<()> {
+    pub fn print_entry(&self, writer: &mut impl Write, flags: &Flags, sizes: &FormatSizes ) -> io::Result<()> {
         // stream_output flag returns the files and directories as a comma separated list
         if flags.stream_output {
             write!(writer, "{}", self.get_name())?;
@@ -52,13 +48,13 @@ impl Entry {
 
         if flags.long_listing {
             write!(writer, "{} ", self.get_permissions())?;
-            write!(writer, "{} ", pad_str(self.get_links(),max_sym_len))?;
+            write!(writer, "{} ", pad_str(self.get_links(),sizes.sym_len))?;
             write!(writer, "{} ", self.get_owners())?;
             write!(writer, "{} ",
                 if flags.human {
-                    format!("{}", pad_str(bytes_to_human(self.get_size()), max_file_len))
+                    format!("{}", pad_str(bytes_to_human(self.get_size()), sizes.file_len))
                 } else {
-                    format!("{} ", pad_str(self.get_size().to_string(),max_file_len))
+                    format!("{} ", pad_str(self.get_size().to_string(), sizes.file_len))
                 })?;
             write!(writer,"{} ", self.get_modified_time())?;
         }
@@ -124,3 +120,23 @@ fn bytes_to_human(bytes: u64) -> String {
     }
 }
 
+fn calculate_format_sizes(entries: &[Entry], flags: &Flags) -> FormatSizes {
+    let file_len = entries.iter()
+        .map(|entry| if flags.human {
+            bytes_to_human(entry.get_size()).chars().count()
+        } else {
+            entry.get_size().to_string().chars().count()
+        })
+        .max()
+        .unwrap_or(6);
+    
+    let sym_len = entries.iter()
+        .map(|entry| entry.get_links().to_string().chars().count())
+        .max()
+        .unwrap_or(2);
+    
+    FormatSizes {
+        file_len,
+        sym_len,
+    }
+}
