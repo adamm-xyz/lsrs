@@ -93,7 +93,9 @@ impl Entry {
 }
 
 fn pad_str(src: String, width: usize) -> String {
-    format!("{:width$}", src, width = width)
+    //println!("{:?}",width);
+    //println!("{:?}",src.len());
+    format!("{}{}", " ".repeat(width-src.len()), src)
 }
 
 /// Converts bytes into human readable format like 2.5KB
