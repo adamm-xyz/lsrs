@@ -92,9 +92,8 @@ impl Entry {
     }
 }
 
+// Appends whitespace to front of string until desired length
 fn pad_str(src: String, width: usize) -> String {
-    //println!("{:?}",width);
-    //println!("{:?}",src.len());
     format!("{}{}", " ".repeat(width-src.len()), src)
 }
 
