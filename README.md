@@ -48,6 +48,7 @@ cargo build
 | -r, --reverse    | reverse order when sorting (-S, -t)                               | false   |
 | -S, --sort-size  | sort by file size, largest first (specify -r for smallest first)  | false   |
 | -t, --sort-mtime | sort by time modified, newest first (specify -r for oldest first) | false   |
+| -R, --recursive  | list subdirectories recursively                                   | false   |
 
 ## Roadmap
 
@@ -57,7 +58,7 @@ cargo build
 - [x] Add help message (--help)
 - [x] Add human-readable option (-h)
 - [x] Add reverse order when sorting (-r)
-- [ ] Add list subdirectories recursively (-R)
+- [x] Add list subdirectories recursively (-R)
 - [x] Add sort by file size, largest first (-S)
 - [x] Add sort by time, newest first (-t)
 - [x] Add fill width with a comma separated list of entries (-m)

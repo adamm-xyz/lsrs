@@ -56,6 +56,11 @@ impl Entry {
         self.name.to_string_lossy().to_string()
     }
 
+    /// Get full path for recursive operations
+    pub fn get_path(&self, base_path: &Path) -> std::path::PathBuf {
+        base_path.join(&self.name)
+    }
+
     /// Gets size (in bytes) of entry
     pub fn get_size(&self) -> u64 {
         self.metadata.len()
@@ -85,6 +90,10 @@ impl Entry {
 }
 
 pub fn get_entries(dir_path: Option<&Path>, flags: &Flags) -> io::Result<Vec<Entry>> {
+    get_entries_internal(dir_path, flags, false)
+}
+
+fn get_entries_internal(dir_path: Option<&Path>, flags: &Flags, is_subdir: bool) -> io::Result<Vec<Entry>> {
     // Convert `dir_path` to Path object
     let path = dir_path.as_ref().map(Path::new);
 
