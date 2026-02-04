@@ -7,7 +7,7 @@ use std::path::PathBuf;
     clippy::struct_excessive_bools,
     reason = "this is not a state machine, but a set of flags"
 )]
-#[derive(Parser, Debug, Default)]
+#[derive(Parser, Debug, Default, Clone)]
 #[command(
     about = concat!(env!("CARGO_CRATE_NAME"), " - list directory contents"), 
     disable_help_flag = true
@@ -48,6 +48,10 @@ pub struct Flags {
     /// list files separated by `, `
     #[arg(short = 'm', long)]
     pub stream_output: bool,
+
+    /// list subdirectories recursively
+    #[arg(short = 'R', long = "recursive")]
+    pub recursive: bool,
 
     /// path to list entries from
     #[arg()]

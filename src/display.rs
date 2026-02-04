@@ -1,7 +1,8 @@
-use crate::entry::Entry;
+use crate::entry::{Entry, get_entries};
 use crate::cli::Flags;
 
 use std::io::{self, Write};
+use std::path::Path;
 use mime_guess::from_path;
 use mime_guess::mime::{APPLICATION, IMAGE, TEXT, VIDEO};
 use colored::{Color, Colorize};
@@ -12,7 +13,12 @@ pub struct FormatSizes {
 }
 
 pub fn print_entries(entries: Vec<Entry>, flags: Flags) -> io::Result<()> {
+    print_entries_recursive(entries, flags, None)
+}
 
+fn print_entries_recursive(entries: Vec<Entry>, flags: Flags, current_path: Option<&Path>) -> io::Result<()> {
+    let base_path = current_path.unwrap_or_else(|| Path::new("."));
+    
     let mut stdout = io::stdout();
     if let Err(error) = entries.iter().enumerate().try_for_each(|(index, entry)| {
         // Comma separate
@@ -34,6 +40,28 @@ pub fn print_entries(entries: Vec<Entry>, flags: Flags) -> io::Result<()> {
         eprintln!("Error printing entries: {error}");
         return Err(error);
     }
+
+    // handle recursive listing if needed
+    if flags.recursive {
+        let subdirs: Vec<_> = entries.iter()
+            .filter(|e| e.is_folder())
+            .collect();
+        
+        for subdir in subdirs {
+            let subdir_path = subdir.get_path(base_path);
+            println!("\n{}:", subdir_path.display());
+            
+            match get_entries(Some(&subdir_path), &flags) {
+                Ok(sub_entries) => {
+                    print_entries_recursive(sub_entries, flags.clone(), Some(&subdir_path))?;
+                }
+                Err(e) => {
+                    eprintln!("Warning: Could not read directory {}: {}", subdir_path.display(), e);
+                }
+            }
+        }
+    }
+    
     Ok(())
 }
 
